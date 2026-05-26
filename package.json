@@ -1,0 +1,17 @@
+{
+  "name": "anugraha-constructions",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "db:push": "pnpm --filter @anugraha/db push",
+    "db:seed": "pnpm --filter @anugraha/api-server seed",
+    "db:reset": "node ./scripts/db-reset.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

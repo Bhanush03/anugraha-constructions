@@ -1,0 +1,10 @@
+export const apiSpec = {
+  openapi: "3.1.0",
+  info: {
+    title: "Anugraha Constructions API",
+    version: "1.0.0"
+  },
+  paths: {
+    "/api/healthz": { get: {} }
+  }
+};

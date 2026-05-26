@@ -1,0 +1,18 @@
+{
+  "name": "@anugraha/api-client-react",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anugraha/api-spec": "workspace:*",
+    "@anugraha/api-zod": "workspace:*",
+    "@tanstack/react-query": "^5.56.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

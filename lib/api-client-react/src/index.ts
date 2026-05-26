@@ -1,0 +1,353 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { z } from "zod";
+
+import {
+  callbackSchema,
+  dashboardStatsSchema,
+  projectSchema,
+  publicStatsSchema,
+  siteSettingsSchema,
+  serviceSchema,
+  teamMemberSchema,
+  testimonialSchema
+} from "./schemas";
+
+const CALLBACK_CACHE_KEY = "anugraha_callbacks_cache";
+
+let apiBaseUrl = "";
+
+export function configureApiClient(baseUrl: string) {
+  apiBaseUrl = baseUrl;
+}
+
+export function getApiBaseUrl() {
+  return apiBaseUrl;
+}
+
+async function request(path: string, init?: RequestInit) {
+  const token = isBrowser() ? localStorage.getItem("anugraha_token") : null;
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers ?? {})
+    },
+    ...init
+  });
+
+  if (!response.ok) {
+    let body = null;
+    try {
+      body = await response.text();
+    } catch (_e) {
+      /* ignore */
+    }
+    throw new Error(`Request failed: ${response.status}${body ? ` - ${body}` : ""}`);
+  }
+
+  if (response.status === 204) {
+    return null;
+  }
+
+  return response.json();
+}
+
+function parseArray<T>(schema: z.ZodType<T>, value: unknown) {
+  return z.array(schema).parse(value);
+}
+
+function isBrowser() {
+  return typeof window !== "undefined";
+}
+
+function readCachedCallbacks() {
+  if (!isBrowser()) return [];
+  try {
+    const cached = localStorage.getItem(CALLBACK_CACHE_KEY);
+    return cached ? JSON.parse(cached) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedCallbacks(callbacks: unknown[]) {
+  if (!isBrowser()) return;
+  localStorage.setItem(CALLBACK_CACHE_KEY, JSON.stringify(callbacks));
+}
+
+function addCachedCallback(payload: Record<string, unknown>) {
+  const now = new Date().toISOString();
+  const entry = callbackSchema.parse({
+    id: Date.now(),
+    name: String(payload.name ?? ""),
+    phone: String(payload.phone ?? ""),
+    email: payload.email ? String(payload.email) : null,
+    message: payload.message ? String(payload.message) : null,
+    status: "pending",
+    createdAt: now
+  });
+  const callbacks = [entry, ...readCachedCallbacks()];
+  writeCachedCallbacks(callbacks);
+  return entry;
+}
+
+function useInvalidation(keys: Array<readonly unknown[]>) {
+  const queryClient = useQueryClient();
+  return async () => {
+    await Promise.all(keys.map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+  };
+}
+
+export function usePublicStats() {
+  return useQuery({
+    queryKey: ["public-stats"],
+    queryFn: async () => publicStatsSchema.parse(await request("/api/stats"))
+  });
+}
+
+export function useFeaturedProjects() {
+  return useQuery({
+    queryKey: ["projects", "featured"],
+    queryFn: async () => parseArray(projectSchema, await request("/api/projects/featured"))
+  });
+}
+
+export function useProject(projectId?: number) {
+  return useQuery({
+    queryKey: ["project", projectId],
+    enabled: Number.isFinite(projectId),
+    queryFn: async () => projectSchema.parse(await request(`/api/projects/${projectId}`))
+  });
+}
+
+export function useOngoingProjects() {
+  return useQuery({
+    queryKey: ["projects", "ongoing"],
+    queryFn: async () => parseArray(projectSchema, await request("/api/projects/ongoing"))
+  });
+}
+
+export function useProjects(status?: string) {
+  return useQuery({
+    queryKey: ["projects", status ?? "all"],
+    queryFn: async () => parseArray(projectSchema, await request(`/api/projects${status ? `?status=${status}` : ""}`))
+  });
+}
+
+export function useServices() {
+  return useQuery({
+    queryKey: ["services"],
+    queryFn: async () => parseArray(serviceSchema, await request("/api/services")),
+    // keep services reasonably fresh: refetch on window focus and poll every 30s
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+    staleTime: 10_000
+  });
+}
+
+export function useTestimonials() {
+  return useQuery({
+    queryKey: ["testimonials"],
+    queryFn: async () => parseArray(testimonialSchema, await request("/api/testimonials"))
+  });
+}
+
+export function useCallbacks() {
+  return useQuery({
+    queryKey: ["callbacks"],
+    queryFn: async () => {
+      try {
+        return parseArray(callbackSchema, await request("/api/callbacks"));
+      } catch {
+        return parseArray(callbackSchema, readCachedCallbacks());
+      }
+    }
+  });
+}
+
+export function useTeam() {
+  return useQuery({
+    queryKey: ["team"],
+    queryFn: async () => parseArray(teamMemberSchema, await request("/api/team"))
+  });
+}
+
+export function useSiteSettings() {
+  return useQuery({
+    queryKey: ["site-settings"],
+    queryFn: async () => siteSettingsSchema.parse(await request("/api/settings")),
+    staleTime: 30_000,
+    retry: 0
+  });
+}
+
+export function useUpdateSiteSettings() {
+  const invalidate = useInvalidation([["site-settings"], ["public-stats"]]);
+  return useMutation({
+    mutationFn: (payload: Record<string, unknown>) => request("/api/settings", { method: "PUT", body: JSON.stringify(payload) }),
+    onSuccess: async () => {
+      await invalidate();
+    }
+  });
+}
+
+export function useDashboardStats() {
+  return useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: async () => {
+      try {
+        return dashboardStatsSchema.parse(await request("/api/stats/dashboard"));
+      } catch {
+        const callbacks = parseArray(callbackSchema, readCachedCallbacks());
+        const pendingCallbacks = callbacks.filter((callback) => callback.status === "pending").length;
+        return dashboardStatsSchema.parse({
+          totalProjects: 0,
+          ongoingProjects: 0,
+          completedProjects: 0,
+          pendingCallbacks,
+          totalCallbacks: callbacks.length,
+          recentCallbacks: callbacks.slice(0, 5),
+          projectsByCategory: [],
+          recentProjects: []
+        });
+      }
+    }
+  });
+}
+
+export function useCreateCallback() {
+  const invalidate = useInvalidation([["callbacks"], ["dashboard-stats"]]);
+  return useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      try {
+        return await request("/api/callbacks", { method: "POST", body: JSON.stringify(payload) });
+      } catch {
+        return addCachedCallback(payload);
+      }
+    },
+    onSuccess: invalidate
+  });
+}
+
+export async function login(username: string, password: string) {
+  const resp = await request("/api/auth/login", { method: "POST", body: JSON.stringify({ username, password }) });
+  if (resp && (resp as any).token) {
+    if (isBrowser()) localStorage.setItem("anugraha_token", (resp as any).token);
+    return (resp as any).token;
+  }
+  throw new Error("Login failed");
+}
+
+export function logout() {
+  if (!isBrowser()) return;
+  localStorage.removeItem("anugraha_token");
+}
+
+export function setAuthToken(token: string | null) {
+  if (!isBrowser()) return;
+  if (!token) localStorage.removeItem("anugraha_token"); else localStorage.setItem("anugraha_token", token);
+}
+
+function createMutation(path: string, method: string, invalidateKeys: Array<readonly unknown[]>) {
+  const invalidate = useInvalidation(invalidateKeys);
+  return useMutation({
+    mutationFn: (payload: Record<string, unknown>) => request(path, { method, body: JSON.stringify(payload) }),
+    onSuccess: invalidate
+  });
+}
+
+export function useCreateProject() {
+  return createMutation("/api/projects", "POST", [["projects"], ["projects", "featured"], ["projects", "ongoing"], ["dashboard-stats"], ["public-stats"]]);
+}
+
+export function useUpdateProject() {
+  const invalidate = useInvalidation([["projects"], ["projects", "featured"], ["projects", "ongoing"], ["dashboard-stats"], ["public-stats"], ["project"]]);
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) => request(`/api/projects/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    onSuccess: invalidate
+  });
+}
+
+export function useDeleteProject() {
+  const invalidate = useInvalidation([["projects"], ["projects", "featured"], ["projects", "ongoing"], ["dashboard-stats"], ["public-stats"], ["project"]]);
+  return useMutation({
+    mutationFn: (id: number) => request(`/api/projects/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate
+  });
+}
+
+export function useCreateService() {
+  return createMutation("/api/services", "POST", [["services"], ["dashboard-stats"]]);
+}
+
+export function useUpdateService() {
+  const invalidate = useInvalidation([["services"], ["dashboard-stats"]]);
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) => request(`/api/services/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    onSuccess: invalidate
+  });
+}
+
+export function useDeleteService() {
+  const invalidate = useInvalidation([["services"], ["dashboard-stats"]]);
+  return useMutation({
+    mutationFn: (id: number) => request(`/api/services/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate
+  });
+}
+
+export function useCreateTestimonial() {
+  return createMutation("/api/testimonials", "POST", [["testimonials"], ["dashboard-stats"]]);
+}
+
+export function useUpdateTestimonial() {
+  const invalidate = useInvalidation([["testimonials"], ["dashboard-stats"]]);
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) => request(`/api/testimonials/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    onSuccess: invalidate
+  });
+}
+
+export function useDeleteTestimonial() {
+  const invalidate = useInvalidation([["testimonials"], ["dashboard-stats"]]);
+  return useMutation({
+    mutationFn: (id: number) => request(`/api/testimonials/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate
+  });
+}
+
+export function useUpdateCallback() {
+  const invalidate = useInvalidation([["callbacks"], ["dashboard-stats"]]);
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) => request(`/api/callbacks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    onSuccess: invalidate
+  });
+}
+
+export function useDeleteCallback() {
+  const invalidate = useInvalidation([["callbacks"], ["dashboard-stats"]]);
+  return useMutation({
+    mutationFn: (id: number) => request(`/api/callbacks/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate
+  });
+}
+
+export function useCreateTeamMember() {
+  return createMutation("/api/team", "POST", [["team"], ["dashboard-stats"], ["public-stats"]]);
+}
+
+export function useUpdateTeamMember() {
+  const invalidate = useInvalidation([["team"], ["dashboard-stats"], ["public-stats"]]);
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: Record<string, unknown> }) => request(`/api/team/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+    onSuccess: invalidate
+  });
+}
+
+export function useDeleteTeamMember() {
+  const invalidate = useInvalidation([["team"], ["dashboard-stats"], ["public-stats"]]);
+  return useMutation({
+    mutationFn: (id: number) => request(`/api/team/${id}`, { method: "DELETE" }),
+    onSuccess: invalidate
+  });
+}
