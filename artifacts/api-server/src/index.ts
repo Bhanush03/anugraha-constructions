@@ -5,7 +5,7 @@ import pino from "pino";
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { callbacks, projects, services, team, testimonials, siteSettings } from "@anugraha/db";
+import { callbacks, projects, services, team, testimonials, siteSettings } from "../../../lib/db/src/index.js";
 
 import fs from "fs";
 import path from "path";
@@ -113,7 +113,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'missing_credentials' });
   try {
-    const dbModule = await import('@anugraha/db');
+    const dbModule = await import("../../../lib/db/src/index.js");
     const [user] = await db.select().from(dbModule.users).where(eq(dbModule.users.username, username));
     if (!user) return res.status(401).json({ error: 'invalid_credentials' });
     const stored = (user as any).passwordHash || (user as any).password_hash || '';

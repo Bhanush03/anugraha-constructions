@@ -1,6 +1,6 @@
 import { and, count, desc, eq, sql } from "drizzle-orm";
 
-import { callbacks, projects, services, team, testimonials, siteSettings } from "@anugraha/db";
+import { callbacks, projects, services, team, testimonials, siteSettings } from "../../../lib/db/src/index.js";
 
 import { db } from "./db.js";
 import { env } from "./env.js";
@@ -405,14 +405,14 @@ async function maybeSeedTable() {
 
   // Seed admin user
   try {
-    const [{ count: userCount }] = await db.select({ count: count() }).from((await import("@anugraha/db")).users as any);
+    const [{ count: userCount }] = await db.select({ count: count() }).from((await import("../../../lib/db/src/index.js")).users as any);
     if (Number(userCount) === 0) {
       const adminUser = env.ADMIN_USERNAME ?? "admin";
       const adminPass = env.ADMIN_PASSWORD ?? "changeme123";
       const salt = crypto.randomBytes(16).toString("hex");
       const hash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
       await db.run(`CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY AUTOINCREMENT, username text NOT NULL, password_hash text NOT NULL, role text NOT NULL DEFAULT 'admin', created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
-      await db.insert((await import("@anugraha/db")).users as any).values({ username: adminUser, passwordHash: hash, role: "admin" });
+      await db.insert((await import("../../../lib/db/src/index.js")).users as any).values({ username: adminUser, passwordHash: hash, role: "admin" });
     }
   } catch (e) {
     // ignore if users table is not yet available in older DBs
