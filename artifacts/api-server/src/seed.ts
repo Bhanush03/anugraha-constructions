@@ -361,7 +361,7 @@ async function maybeSeedTable() {
   if (!db) return;
   const [{ count: projectCount }] = await db.select({ count: count() }).from(projects);
   if (Number(projectCount) === 0) {
-    await db.insert(projects).values(projectSeed.map((project) => ({ ...project, images: JSON.stringify(project.images), features: JSON.stringify(project.features ?? []), amenities: JSON.stringify(project.amenities ?? []), featured: Boolean(project.featured) ? 1 : 0 })));
+    await db.insert(projects).values(projectSeed.map((project) => ({ ...project, images: JSON.stringify(project.images), features: JSON.stringify(project.features ?? []), amenities: JSON.stringify(project.amenities ?? []), featured: Boolean(project.featured) })));
   } else {
     for (const project of projectSeed) {
       await db.update(projects).set({
@@ -380,7 +380,7 @@ async function maybeSeedTable() {
 
   const [{ count: testimonialCount }] = await db.select({ count: count() }).from(testimonials);
   if (Number(testimonialCount) === 0) {
-    await db.insert(testimonials).values(testimonialSeed.map((testimonial) => ({ ...testimonial, featured: Boolean(testimonial.featured) ? 1 : 0 })));
+    await db.insert(testimonials).values(testimonialSeed.map((testimonial) => ({ ...testimonial, featured: Boolean(testimonial.featured) })));
   }
 
   const [{ count: teamCount }] = await db.select({ count: count() }).from(team);

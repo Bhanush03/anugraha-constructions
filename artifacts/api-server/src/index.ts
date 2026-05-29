@@ -465,7 +465,7 @@ app.post("/api/testimonials", requireAuth, requireAdmin, async (req, res) => {
     const saved = saveDataUrlImage(payload.avatarUrl, `testimonial-${Date.now()}`);
     if (saved) payload.avatarUrl = saved;
   }
-  await db.insert(testimonials).values({ ...payload, featured: payload.featured ? 1 : 0 });
+  await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) });
   const [inserted] = await db.select().from(testimonials).orderBy(desc(testimonials.id)).limit(1);
   persistDatabase();
   res.status(201).json(mapTestimonial(inserted));
