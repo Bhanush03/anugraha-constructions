@@ -361,14 +361,15 @@ app.post("/api/projects", requireAuth, requireAdmin, async (req, res) => {
   try {
     const payload = projectInputSchema.parse(req.body);
     const galleryImages = payload.galleryImages ?? payload.images ?? [];
+    const { images, features, amenities, galleryImages: _galleryImages, ...basePayload } = payload;
     const nextPayload = {
-      ...payload,
+      ...basePayload,
       slug: payload.slug ?? slugify(payload.title),
       imageUrl: normalizeProjectImage(payload.imageUrl, `project-${Date.now()}-cover`) ?? payload.imageUrl,
       images: JSON.stringify(galleryImages.map((image, index) => normalizeProjectImage(image, `project-${Date.now()}-${index + 1}`) ?? image)),
-      features: JSON.stringify(payload.features ?? []),
-      amenities: JSON.stringify(payload.amenities ?? []),
-      featured: payload.featured ? 1 : 0
+      features: JSON.stringify(features ?? []),
+      amenities: JSON.stringify(amenities ?? []),
+      featured: Boolean(payload.featured)
     };
     await db.insert(projects).values(nextPayload);
     const [inserted] = await db.select().from(projects).orderBy(desc(projects.id)).limit(1);
@@ -385,14 +386,15 @@ app.patch("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
   try {
     const payload = projectInputSchema.partial().parse(req.body);
     const galleryImages = payload.galleryImages ?? payload.images;
+    const { images, features, amenities, galleryImages: _galleryImages, ...basePayload } = payload;
     const nextPayload = {
-      ...payload,
+      ...basePayload,
       ...(typeof payload.slug === "string" ? { slug: payload.slug } : {}),
       ...(typeof payload.imageUrl === "string" ? { imageUrl: normalizeProjectImage(payload.imageUrl, `project-${id}-cover`) ?? payload.imageUrl } : {}),
       ...(Array.isArray(galleryImages) ? { images: JSON.stringify(galleryImages.map((image, index) => normalizeProjectImage(image, `project-${id}-${index + 1}`) ?? image)) } : {}),
-      ...(Array.isArray(payload.features) ? { features: JSON.stringify(payload.features) } : {}),
-      ...(Array.isArray(payload.amenities) ? { amenities: JSON.stringify(payload.amenities) } : {}),
-      ...(typeof payload.featured === "boolean" ? { featured: payload.featured ? 1 : 0 } : {})
+      ...(Array.isArray(features) ? { features: JSON.stringify(features) } : {}),
+      ...(Array.isArray(amenities) ? { amenities: JSON.stringify(amenities) } : {}),
+      ...(typeof payload.featured === "boolean" ? { featured: payload.featured } : {})
     };
     await db.update(projects).set(nextPayload).where(eq(projects.id, id));
     const [updated] = await db.select().from(projects).where(eq(projects.id, id));
@@ -440,7 +442,12 @@ app.patch("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
     const saved = saveDataUrlImage(payload.icon, `service-${id}`);
     if (saved) payload.icon = saved;
   }
-  await db.update(services).set({ ...payload, ...(Array.isArray(payload.features) ? { features: JSON.stringify(payload.features) } : {}) }).where(eq(services.id, id));
+  const { features, ...basePayload } = payload;
+  const nextServicePayload = {
+    ...basePayload,
+    ...(features !== undefined ? { features: Array.isArray(features) ? JSON.stringify(features) : features } : {})
+  };
+  await db.update(services).set(nextServicePayload).where(eq(services.id, id));
   const [updated] = await db.select().from(services).where(eq(services.id, id));
   if (!updated) return res.status(404).json(notFound("Service not found"));
   persistDatabase();
@@ -474,7 +481,7 @@ app.post("/api/testimonials", requireAuth, requireAdmin, async (req, res) => {
 app.patch("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   const payload = testimonialInputSchema.partial().parse(req.body);
-  await db.update(testimonials).set({ ...payload, ...(typeof payload.featured === "boolean" ? { featured: payload.featured ? 1 : 0 } : {}) }).where(eq(testimonials.id, id));
+  await db.update(testimonials).set({ ...payload, ...(typeof payload.featured === "boolean" ? { featured: payload.featured } : {}) }).where(eq(testimonials.id, id));
   const [updated] = await db.select().from(testimonials).where(eq(testimonials.id, id));
   if (!updated) return res.status(404).json(notFound("Testimonial not found"));
   persistDatabase();
