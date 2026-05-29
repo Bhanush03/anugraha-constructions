@@ -143,6 +143,19 @@ type TestimonialRecord = {
   featured: boolean;
 };
 
+type DashboardStatsRecord = {
+  totalProjects: number;
+  ongoingProjects: number;
+  completedProjects: number;
+  pendingCallbacks: number;
+  totalCallbacks: number;
+  happyClients?: number;
+  yearsExperience?: number;
+  recentCallbacks: CallbackRecord[];
+  recentProjects: ProjectRecord[];
+  projectsByCategory: Array<{ category: string; count: number }>;
+};
+
 function NumberTicker({ value }: { value: number }) {
   const [current, setCurrent] = useState(0);
   useEffect(() => {
@@ -327,7 +340,7 @@ function AdminTable({ columns, children }: { columns: string[]; children: React.
 
 function DashboardPage() {
   const statsQuery = useDashboardStats();
-  const stats = statsQuery.data;
+  const stats = statsQuery.data as DashboardStatsRecord | undefined;
   // apply local overrides from admin settings and allow inline editing on dashboard
   const [siteOverrides, setSiteOverrides] = useState(() => {
     try {
@@ -376,7 +389,7 @@ function DashboardPage() {
     writeOverridesLocally(next);
   };
 
-  const finalStats = {
+  const finalStats: DashboardStatsRecord = {
     ...stats,
     totalProjects: siteOverrides.totalProjects ?? stats?.totalProjects,
     ongoingProjects: siteOverrides.ongoingProjects ?? stats?.ongoingProjects,
@@ -903,14 +916,14 @@ function SettingsPage() {
               label="Office Name"
               value={String(overrides.officeName ?? "Shivakripa building")}
               placeholder="Shivakripa building"
-              onSave={(nextValue) => saveSetting({ officeName: nextValue })}
+              onSave={(nextValue) => update({ officeName: nextValue })}
               helperText="Shown on the Office card and in the footer presence line."
             />
             <EditableSettingRow
               label="Office Address"
               value={String(overrides.officeAddress ?? "APMC ROAD, near City hospital, Puttur, Karnataka 574201")}
               placeholder="APMC ROAD, near City hospital, Puttur, Karnataka 574201"
-              onSave={(nextValue) => saveSetting({ officeAddress: nextValue })}
+              onSave={(nextValue) => update({ officeAddress: nextValue })}
               isTextarea
               helperText="Shown as the clickable location text on the homepage."
             />
@@ -918,7 +931,7 @@ function SettingsPage() {
               label="Google Maps URL"
               value={String(overrides.mapsUrl ?? "https://maps.app.goo.gl/eFWv8LbsT6YXw1VH8")}
               placeholder="https://maps.app.goo.gl/..."
-              onSave={(nextValue) => saveSetting({ mapsUrl: nextValue })}
+              onSave={(nextValue) => update({ mapsUrl: nextValue })}
               helperText="Used for the map pin, office link, and Google review card if no review URL is set."
             />
           </div>
@@ -933,7 +946,7 @@ function SettingsPage() {
               label="Google Review URL"
               value={String(overrides.googleReviewUrl ?? "https://maps.app.goo.gl/eFWv8LbsT6YXw1VH8")}
               placeholder="https://maps.app.goo.gl/..."
-              onSave={(nextValue) => saveSetting({ googleReviewUrl: nextValue })}
+              onSave={(nextValue) => update({ googleReviewUrl: nextValue })}
               helperText="Shown on the Google Review CTA and footer review card."
             />
           </div>

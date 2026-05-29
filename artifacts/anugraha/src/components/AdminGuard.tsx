@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode, type FormEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Eye, EyeOff, Lock } from "lucide-react";
 
@@ -8,6 +8,7 @@ import { login } from "@anugraha/api-client-react";
 const storageKey = "anugraha_admin_auth";
 
 export function AdminGuard({ children }: { children: ReactNode }) {
+  const adminUsername = import.meta.env.VITE_ADMIN_USERNAME ?? "admin";
   const [isAuthed, setIsAuthed] = useState(() => {
     try {
       const hasFlag = sessionStorage.getItem(storageKey) === "1";
@@ -21,24 +22,27 @@ export function AdminGuard({ children }: { children: ReactNode }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.add("dark");
     return () => document.documentElement.classList.remove("dark");
   }, []);
 
-  const submit = () => {
-    // Passwordless: mark session authed immediately (dev convenience)
+  const submit = async (event?: FormEvent) => {
+    event?.preventDefault();
     setError("");
+    setIsSubmitting(true);
     try {
+      await login(adminUsername, password);
       sessionStorage.setItem(storageKey, "1");
-      // also set a dev token so initial check passes
-      if (typeof window !== "undefined") {
-        localStorage.setItem("anugraha_token", "dev-token");
-      }
       setIsAuthed(true);
     } catch (e) {
-      setError("Failed to set auth session");
+      setError(e instanceof Error ? e.message : "Failed to sign in");
+      setShake(true);
+      window.setTimeout(() => setShake(false), 450);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -70,7 +74,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="Enter admin password"
                     className="border-white/10 bg-white/8 pr-12 text-white placeholder:text-white/40"
-                    onKeyDown={(event) => event.key === "Enter" && submit()}
+                    onKeyDown={(event) => event.key === "Enter" && submit(event)}
                   />
                   <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/60">
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -78,8 +82,8 @@ export function AdminGuard({ children }: { children: ReactNode }) {
                 </div>
               </motion.div>
               <AnimatePresence>{error ? <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-sm text-rose-300">{error}</motion.p> : null}</AnimatePresence>
-              <Button variant="glass" className="w-full" onClick={submit}>
-                Enter Dashboard
+              <Button variant="glass" className="w-full" onClick={submit} disabled={isSubmitting}>
+                {isSubmitting ? "Signing in..." : "Enter Dashboard"}
               </Button>
             </CardContent>
           </Card>

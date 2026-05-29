@@ -69,6 +69,8 @@ export const dashboardStatsSchema = z.object({
   completedProjects: z.number(),
   pendingCallbacks: z.number(),
   totalCallbacks: z.number(),
+  happyClients: z.number().optional(),
+  yearsExperience: z.number().optional(),
   recentCallbacks: z.array(callbackSchema),
   projectsByCategory: z.array(z.object({ category: z.string(), count: z.number() })),
   recentProjects: z.array(projectSchema)

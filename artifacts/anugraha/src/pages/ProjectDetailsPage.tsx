@@ -26,11 +26,13 @@ function buildWhatsAppUrl(projectTitle: string, projectLocation: string) {
 }
 
 function ProjectTile({
+  id,
   title,
   imageUrl,
   category,
   onOpen
 }: {
+  id: number;
   title: string;
   imageUrl: string;
   category: string;
