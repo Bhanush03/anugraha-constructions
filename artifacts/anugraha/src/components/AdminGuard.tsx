@@ -8,7 +8,6 @@ import { login } from "@anugraha/api-client-react";
 const storageKey = "anugraha_admin_auth";
 
 export function AdminGuard({ children }: { children: ReactNode }) {
-  const adminUsername = import.meta.env.VITE_ADMIN_USERNAME ?? "admin";
   const [isAuthed, setIsAuthed] = useState(() => {
     try {
       const hasFlag = sessionStorage.getItem(storageKey) === "1";
@@ -18,6 +17,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
       return false;
     }
   });
+  const [username, setUsername] = useState(import.meta.env.VITE_ADMIN_USERNAME ?? "admin");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
@@ -34,7 +34,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     setError("");
     setIsSubmitting(true);
     try {
-      await login(adminUsername, password);
+      await login(username, password);
       sessionStorage.setItem(storageKey, "1");
       setIsAuthed(true);
     } catch (e) {
@@ -66,6 +66,13 @@ export function AdminGuard({ children }: { children: ReactNode }) {
               <p className="text-sm text-white/70">Anugraha Constructions — Owner Portal</p>
             </CardHeader>
             <CardContent className="space-y-4 p-8">
+              <Input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="Enter admin username"
+                autoComplete="username"
+                className="border-white/10 bg-white/8 text-white placeholder:text-white/40"
+              />
               <motion.div animate={shake ? { x: [0, -10, 10, -8, 8, 0] } : { x: 0 }} transition={{ duration: 0.45 }}>
                 <div className="relative">
                   <Input
@@ -73,6 +80,7 @@ export function AdminGuard({ children }: { children: ReactNode }) {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="Enter admin password"
+                    autoComplete="current-password"
                     className="border-white/10 bg-white/8 pr-12 text-white placeholder:text-white/40"
                     onKeyDown={(event) => event.key === "Enter" && submit(event)}
                   />
