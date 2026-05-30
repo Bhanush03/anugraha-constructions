@@ -5,17 +5,15 @@ import pino from "pino";
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { callbacks, projects, services, team, testimonials, siteSettings } from "../../../lib/db/src/index.js";
+import { callbacks, projects, services, team, testimonials, siteSettings, users } from "../../../lib/db/src/index.js";
 
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import { env } from "./env.js";
-import { requireAuth, requireAdmin } from "./middleware/auth.js";
-
-// DB-backed API: requires DATABASE_URL at startup
-const { db, persistDatabase } = await import("./db.js");
-const { seedDatabase } = await import("./seed.js");
+import { requireAuth, requireAdmin, signToken } from "./middleware/auth.js";
+import { db, persistDatabase } from "./db.js";
+import { seedDatabase } from "./seed.js";
 import { serializeCallback, serializeProject, serializeService, serializeTeamMember, serializeTestimonial } from "./serializers.js";
 
 const app = express();
@@ -110,27 +108,54 @@ app.get("/api/healthz", (_req, res) => {
 
 // Auth
 app.post('/api/auth/login', async (req, res) => {
+  console.info("/api/auth/login request body", req.body);
   const { username, password } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: 'missing_credentials' });
+  console.info("/api/auth/login username received", { username });
+  console.info("/api/auth/login env flags", {
+    hasADMIN_USERNAME: Boolean(env.ADMIN_USERNAME),
+    hasADMIN_PASSWORD: Boolean(env.ADMIN_PASSWORD),
+    hasJWT_SECRET: Boolean(env.JWT_SECRET)
+  });
+  if (!username || !password) {
+    console.error("/api/auth/login missing credentials", { usernamePresent: Boolean(username), passwordPresent: Boolean(password) });
+    return res.status(400).json({ error: 'missing_credentials' });
+  }
   try {
-    const dbModule = await import("../../../lib/db/src/index.js");
-    const [user] = await db.select().from(dbModule.users).where(eq(dbModule.users.username, username));
-    if (!user) return res.status(401).json({ error: 'invalid_credentials' });
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    console.info("/api/auth/login user lookup complete", { username, userFound: Boolean(user) });
+    if (!user) {
+      console.error("/api/auth/login invalid credentials: user not found", { username });
+      return res.status(401).json({ error: 'invalid_credentials' });
+    }
     const stored = (user as any).passwordHash || (user as any).password_hash || '';
     let ok = false;
     if (stored.includes(':')) {
       const [hash, salt] = stored.split(':');
+      console.info("/api/auth/login stored password uses PBKDF2", { saltPresent: Boolean(salt) });
       const derived = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex');
+      console.info("/api/auth/login derived hash computed", { derivedLength: derived.length });
       ok = derived === hash;
     } else {
       ok = password === stored;
     }
-    if (!ok) return res.status(401).json({ error: 'invalid_credentials' });
-    const { signToken } = await import('./middleware/auth.js');
+    console.info("/api/auth/login password verification result", { username, ok });
+    if (!ok) {
+      console.error("/api/auth/login invalid credentials: password mismatch", { username });
+      return res.status(401).json({ error: 'invalid_credentials' });
+    }
     const token = signToken({ username: user.username, role: user.role });
-    res.json({ token });
-  } catch (e) {
-    res.status(500).json({ error: 'server_error' });
+    console.info("/api/auth/login token generated", { username });
+    console.info("/api/auth/login success", { username: user.username, role: user.role });
+    return res.json({ token });
+  } catch (error) {
+    console.error("LOGIN ERROR:", error);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+    return res.status(500).json({
+      error: 'server_error',
+      message: error instanceof Error ? error.message : String(error)
+    });
   }
 });
 
@@ -210,7 +235,7 @@ app.get("/api/settings", async (_req, res) => {
       }
     }
   } catch (e) {
-    // fall through to file-based settings
+    console.error("Error reading site settings from DB, falling back to file-based settings:", e);
   }
   res.json(readSettings());
 });
@@ -651,11 +676,21 @@ app.delete("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
 });
 
 async function main() {
+  logger.info({ databaseUrl: env.DATABASE_URL, jwtSecretPresent: Boolean(env.JWT_SECRET) }, "startup: env");
   if (typeof seedDatabase === "function") {
     await seedDatabase();
   } else {
     logger.info("DB not configured; skipping database seed.");
   }
+
+  // post-seed diagnostics: verify users table and admin user count
+  try {
+    const [{ count: adminCount }] = await db.select({ count: count() }).from(users as any);
+    logger.info({ adminCount: Number(adminCount) }, "startup: users table admin count");
+  } catch (e) {
+    logger.error({ err: String(e) }, "startup: users table check failed");
+  }
+
   persistDatabase();
   const port = Number(process.env.PORT ?? 3001);
   app.listen(port, () => {

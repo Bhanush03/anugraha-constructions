@@ -39,7 +39,7 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
       return next();
     }
   } catch (e) {
-    // fall through to normal auth
+    console.error("requireAuth: error checking ALLOW_PASSWORDLESS_ADMIN", e);
   }
 
   const auth = req.headers.authorization;

@@ -1,8 +1,8 @@
 import { and, count, desc, eq, sql } from "drizzle-orm";
 
-import { callbacks, projects, services, team, testimonials, siteSettings } from "../../../lib/db/src/index.js";
+import { callbacks, projects, services, team, testimonials, siteSettings, users } from "../../../lib/db/src/index.js";
 
-import { db } from "./db.js";
+import { db, persistDatabase } from "./db.js";
 import { env } from "./env.js";
 import crypto from "crypto";
 
@@ -400,22 +400,60 @@ async function maybeSeedTable() {
       await db.insert(siteSettings as any).values({ overviewBadge: "Since 2010", overviewTitle: "Measured delivery. Elevated living.", overviewDescription: "A concise view of scale, trust, and delivery discipline across premium residential and commercial assets.", totalProjects: 0, yearsExperience: 9, happyClients: 40, teamSize: 12 });
     }
   } catch (e) {
-    // ignore if older DB versions or import quirks
+    // surface errors for inspection rather than silently swallowing
+    console.error("Error seeding site_settings:", e);
+    throw e;
   }
-
-  // Seed admin user
+  // Seed admin user: ensure users table exists, then query and insert if empty
   try {
-    const [{ count: userCount }] = await db.select({ count: count() }).from((await import("../../../lib/db/src/index.js")).users as any);
+    // create users table before any queries against it
+    await db.run(`CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY AUTOINCREMENT, username text NOT NULL, password_hash text NOT NULL, role text NOT NULL DEFAULT 'admin', created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
+    console.info("users table created or already exists");
+
+    const [{ count: userCount }] = await db.select({ count: count() }).from(users as any);
+    const adminUser = env.ADMIN_USERNAME ?? "admin";
+    const adminPass = env.ADMIN_PASSWORD ?? "changeme123";
     if (Number(userCount) === 0) {
-      const adminUser = env.ADMIN_USERNAME ?? "admin";
-      const adminPass = env.ADMIN_PASSWORD ?? "changeme123";
       const salt = crypto.randomBytes(16).toString("hex");
       const hash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
-      await db.run(`CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY AUTOINCREMENT, username text NOT NULL, password_hash text NOT NULL, role text NOT NULL DEFAULT 'admin', created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
-      await db.insert((await import("../../../lib/db/src/index.js")).users as any).values({ username: adminUser, passwordHash: hash, role: "admin" });
+      await db.insert(users as any).values({ username: adminUser, passwordHash: hash, role: "admin" });
+      persistDatabase();
+      console.info("admin user created", { username: adminUser });
+    } else {
+      // ensure admin user exists and password is up-to-date
+      const [existingAdmin] = await db.select().from(users as any).where(eq(users.username, adminUser));
+      if (!existingAdmin) {
+        // admin username missing — create it
+        const salt = crypto.randomBytes(16).toString("hex");
+        const hash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
+        await db.insert(users as any).values({ username: adminUser, passwordHash: hash, role: "admin" });
+        persistDatabase();
+        console.info("admin user created (missing username)", { username: adminUser });
+      } else {
+        // check password; if ADMIN_PASSWORD supplied and doesn't match, update
+        const stored = (existingAdmin as any).passwordHash || (existingAdmin as any).password_hash || '';
+        let matches = false;
+        if (stored.includes(':')) {
+          const [hash, salt] = stored.split(':');
+          const derived = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex");
+          matches = derived === hash;
+        } else {
+          matches = adminPass === stored;
+        }
+        if (!matches) {
+          const salt = crypto.randomBytes(16).toString("hex");
+          const newHash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
+          await db.update(users as any).set({ passwordHash: newHash }).where(eq(users.username, adminUser));
+          persistDatabase();
+          console.info("admin user password updated", { username: adminUser });
+        } else {
+          console.info("admin user already exists and password matches", { username: adminUser });
+        }
+      }
     }
   } catch (e) {
-    // ignore if users table is not yet available in older DBs
+    console.error("Error seeding users table:", e);
+    throw e;
   }
 }
 
