@@ -29,7 +29,6 @@ import {
   ClipboardList,
   Users
 } from "lucide-react";
-import { Link } from "wouter";
 import { useLocation } from "wouter";
 
 import {
@@ -571,7 +570,6 @@ export default function HomePage() {
             <div className="text-sm font-semibold uppercase tracking-[0.24em] text-white/55">Quick Links</div>
             <div className="mt-4 grid gap-3 text-sm text-white/75">
               {navLinks.map((link) => <a key={link.label} href={link.href}>{link.label}</a>)}
-              <Link href="/admin">Admin Dashboard</Link>
             </div>
           </div>
           <div>
