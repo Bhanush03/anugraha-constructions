@@ -12,8 +12,6 @@ import {
   testimonialSchema
 } from "./schemas";
 
-const CALLBACK_CACHE_KEY = "anugraha_callbacks_cache";
-
 let apiBaseUrl = "";
 
 export function configureApiClient(baseUrl: string) {
@@ -58,37 +56,6 @@ function parseArray<T>(schema: z.ZodType<T>, value: unknown) {
 
 function isBrowser() {
   return typeof window !== "undefined";
-}
-
-function readCachedCallbacks() {
-  if (!isBrowser()) return [];
-  try {
-    const cached = localStorage.getItem(CALLBACK_CACHE_KEY);
-    return cached ? JSON.parse(cached) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeCachedCallbacks(callbacks: unknown[]) {
-  if (!isBrowser()) return;
-  localStorage.setItem(CALLBACK_CACHE_KEY, JSON.stringify(callbacks));
-}
-
-function addCachedCallback(payload: Record<string, unknown>) {
-  const now = new Date().toISOString();
-  const entry = callbackSchema.parse({
-    id: Date.now(),
-    name: String(payload.name ?? ""),
-    phone: String(payload.phone ?? ""),
-    email: payload.email ? String(payload.email) : null,
-    message: payload.message ? String(payload.message) : null,
-    status: "pending",
-    createdAt: now
-  });
-  const callbacks = [entry, ...readCachedCallbacks()];
-  writeCachedCallbacks(callbacks);
-  return entry;
 }
 
 function useInvalidation(keys: Array<readonly unknown[]>) {
@@ -155,13 +122,10 @@ export function useTestimonials() {
 export function useCallbacks() {
   return useQuery({
     queryKey: ["callbacks"],
-    queryFn: async () => {
-      try {
-        return parseArray(callbackSchema, await request("/api/callbacks"));
-      } catch {
-        return parseArray(callbackSchema, readCachedCallbacks());
-      }
-    }
+    queryFn: async () => parseArray(callbackSchema, await request("/api/callbacks")),
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
+    staleTime: 5_000
   });
 }
 
@@ -194,24 +158,10 @@ export function useUpdateSiteSettings() {
 export function useDashboardStats() {
   return useQuery({
     queryKey: ["dashboard-stats"],
-    queryFn: async () => {
-      try {
-        return dashboardStatsSchema.parse(await request("/api/stats/dashboard"));
-      } catch {
-        const callbacks = parseArray(callbackSchema, readCachedCallbacks());
-        const pendingCallbacks = callbacks.filter((callback) => callback.status === "pending").length;
-        return dashboardStatsSchema.parse({
-          totalProjects: 0,
-          ongoingProjects: 0,
-          completedProjects: 0,
-          pendingCallbacks,
-          totalCallbacks: callbacks.length,
-          recentCallbacks: callbacks.slice(0, 5),
-          projectsByCategory: [],
-          recentProjects: []
-        });
-      }
-    }
+    queryFn: async () => dashboardStatsSchema.parse(await request("/api/stats/dashboard")),
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
+    staleTime: 5_000
   });
 }
 
@@ -219,13 +169,11 @@ export function useCreateCallback() {
   const invalidate = useInvalidation([["callbacks"], ["dashboard-stats"]]);
   return useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      try {
-        return await request("/api/callbacks", { method: "POST", body: JSON.stringify(payload) });
-      } catch {
-        return addCachedCallback(payload);
-      }
+      return await request("/api/public/callbacks", { method: "POST", body: JSON.stringify(payload) });
     },
-    onSuccess: invalidate
+    onSuccess: async () => {
+      await invalidate();
+    }
   });
 }
 
