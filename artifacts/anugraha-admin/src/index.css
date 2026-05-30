@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 217 100% 10%;
+  --primary: 221 100% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 217 100% 97%;
+  --muted: 215 20% 96%;
+  --muted-foreground: 215 16% 47%;
+  --border: 215 20% 90%;
+  --card: 0 0% 100%;
+  --sidebar: 217 100% 10%;
+  --radius: 0.75rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  font-family: Inter, sans-serif;
+  background:
+    radial-gradient(circle at top left, rgba(10, 102, 255, 0.12), transparent 30%),
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 25%),
+    linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+  color: hsl(var(--foreground));
+}
+
+.dark {
+  --background: 217 100% 10%;
+  --foreground: 0 0% 100%;
+  --primary: 221 100% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 217 34% 16%;
+  --muted: 217 28% 18%;
+  --muted-foreground: 215 20% 70%;
+  --border: 217 34% 24%;
+  --card: 217 62% 14%;
+  --sidebar: 217 100% 10%;
+  background: #071b34;
+  color: white;
+}
+
+@keyframes mesh {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4%, -2%, 0) scale(1.1); }
+  100% { transform: translate3d(0, 0, 0) scale(1); }
+}
+
+.mesh-bg {
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(10, 102, 255, 0.36), transparent 26%),
+    radial-gradient(circle at 80% 30%, rgba(255, 255, 255, 0.2), transparent 22%),
+    radial-gradient(circle at 40% 80%, rgba(10, 102, 255, 0.22), transparent 24%);
+  filter: blur(26px);
+  animation: mesh 18s ease-in-out infinite;
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(10, 102, 255, 0.15);
+}
+
+.hero-grid {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.marquee-track {
+  animation: marquee 35s linear infinite;
+}
+
+.whatsapp-float {
+  animation: float 5s ease-in-out infinite;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: "Cormorant Garamond", serif;
+  }
+}
