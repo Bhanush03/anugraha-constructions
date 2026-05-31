@@ -4,6 +4,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "scripts": {
+    "prepare": "pnpm build",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "generate": "drizzle-kit generate --config drizzle.config.ts",
