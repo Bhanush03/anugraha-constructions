@@ -1,6 +1,8 @@
-import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, pgSchema, serial, text, timestamp } from "drizzle-orm/pg-core";
 
-export const projects = pgTable("projects", {
+const publicSchema = pgSchema("public");
+
+export const projects = publicSchema.table("projects", {
 	id: serial("id").primaryKey(),
 	slug: text("slug").notNull().default(""),
 	title: text("title").notNull(),
@@ -21,7 +23,7 @@ export const projects = pgTable("projects", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const services = pgTable("services", {
+export const services = publicSchema.table("services", {
 	id: serial("id").primaryKey(),
 	title: text("title").notNull(),
 	description: text("description").notNull(),
@@ -31,7 +33,7 @@ export const services = pgTable("services", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const testimonials = pgTable("testimonials", {
+export const testimonials = publicSchema.table("testimonials", {
 	id: serial("id").primaryKey(),
 	clientName: text("client_name").notNull(),
 	clientTitle: text("client_title").notNull(),
@@ -42,7 +44,7 @@ export const testimonials = pgTable("testimonials", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const callbacks = pgTable("callbacks", {
+export const callbacks = publicSchema.table("callbacks", {
 	id: serial("id").primaryKey(),
 	name: text("name").notNull(),
 	phone: text("phone").notNull(),
@@ -52,7 +54,7 @@ export const callbacks = pgTable("callbacks", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const team = pgTable("team", {
+export const team = publicSchema.table("team", {
 	id: serial("id").primaryKey(),
 	name: text("name").notNull(),
 	role: text("role").notNull(),
@@ -62,7 +64,7 @@ export const team = pgTable("team", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const users = pgTable("users", {
+export const users = publicSchema.table("users", {
 	id: serial("id").primaryKey(),
 	username: text("username").notNull(),
 	passwordHash: text("password_hash").notNull(),
@@ -70,7 +72,7 @@ export const users = pgTable("users", {
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const siteSettings = pgTable("site_settings", {
+export const siteSettings = publicSchema.table("site_settings", {
 	id: serial("id").primaryKey(),
 	overviewBadge: text("overview_badge"),
 	overviewTitle: text("overview_title"),

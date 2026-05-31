@@ -674,17 +674,32 @@ app.delete("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
   res.status(204).end();
 });
 
+async function ensureInitialAdminUser() {
+  try {
+    const [{ count: userCount }] = await db.select({ count: count() }).from(users);
+    if (Number(userCount) !== 0) {
+      logger.info({ userCount: Number(userCount) }, "startup: users table admin count");
+      return;
+    }
+
+    const adminUser = env.ADMIN_USERNAME;
+    const adminPass = env.ADMIN_PASSWORD;
+    const salt = crypto.randomBytes(16).toString("hex");
+    const passwordHash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
+
+    await db.insert(users).values({ username: adminUser, passwordHash, role: "admin" });
+    persistDatabase();
+    logger.info({ username: adminUser }, "startup: initial admin user created");
+  } catch (e) {
+    logger.error({ err: String(e) }, "startup: users table check failed");
+  }
+}
+
 async function main() {
   logger.info({ databaseUrl: env.DATABASE_URL, jwtSecretPresent: Boolean(env.JWT_SECRET) }, "startup: env");
   logger.info("startup: automatic database seeding disabled");
 
-  // post-seed diagnostics: verify users table and admin user count
-  try {
-    const [{ count: adminCount }] = await db.select({ count: count() }).from(users as any);
-    logger.info({ adminCount: Number(adminCount) }, "startup: users table admin count");
-  } catch (e) {
-    logger.error({ err: String(e) }, "startup: users table check failed");
-  }
+  await ensureInitialAdminUser();
 
   persistDatabase();
   const port = Number(process.env.PORT ?? 3001);
