@@ -5,7 +5,7 @@
   "main": "./dist/artifacts/api-server/src/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "corepack pnpm --filter @anugraha/db build && tsc -p tsconfig.json",
     "start": "node dist/artifacts/api-server/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/seed.ts"
