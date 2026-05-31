@@ -1,6 +1,6 @@
 import { and, count, desc, eq } from "drizzle-orm";
 
-import { callbacks, projects, services, team, testimonials, siteSettings, users } from "../../../lib/db/dist/index.js";
+import { callbacks, projects, services, team, testimonials, siteSettings, users } from "@anugraha/db";
 
 import { db } from "./db.js";
 import { env } from "./env.js";
