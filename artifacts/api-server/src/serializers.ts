@@ -1,6 +1,6 @@
 import type { InferSelectModel } from "drizzle-orm";
 
-import { callbacks, projects, services, team, testimonials } from "@anugraha/db";
+import { callbacks, projects, services, team, testimonials } from "./db/index.js";
 
 const toIso = (value: Date | string) => (value instanceof Date ? value : new Date(value)).toISOString();
 const parseJsonArray = (value: string | string[] | null | undefined) => {

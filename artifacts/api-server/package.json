@@ -5,17 +5,17 @@
   "main": "./dist/artifacts/api-server/src/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "corepack pnpm --filter @anugraha/db build && tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json",
     "start": "node dist/artifacts/api-server/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {
-    "@anugraha/db": "workspace:*",
     "cors": "^2.8.5",
     "drizzle-orm": "^0.44.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.3.1",
+    "postgres": "^3.4.9",
     "express-rate-limit": "^6.8.0",
     "jsonwebtoken": "^9.0.2",
     "express": "^5.0.0",

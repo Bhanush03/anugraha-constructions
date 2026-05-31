@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
 export const projects = pgTable("projects", {
@@ -84,5 +83,3 @@ export const siteSettings = pgTable("site_settings", {
 	logoImage: text("logo_image"),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
-
-export const schemaRelations = relations;

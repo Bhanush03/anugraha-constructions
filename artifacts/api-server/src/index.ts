@@ -5,7 +5,7 @@ import pino from "pino";
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { callbacks, projects, services, team, testimonials, siteSettings, users } from "@anugraha/db";
+import { callbacks, projects, services, team, testimonials, siteSettings, users } from "./db/index.js";
 
 import fs from "fs";
 import path from "path";
