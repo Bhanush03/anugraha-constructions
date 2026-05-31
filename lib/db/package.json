@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js"
+  },
   "scripts": {
     "prepare": "pnpm build",
     "build": "tsc -p tsconfig.json",
