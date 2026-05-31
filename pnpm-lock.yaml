@@ -222,7 +222,7 @@ importers:
         specifier: ^0.44.0
         version: 0.44.7(postgres@3.4.9)(sql.js@1.14.1)
       postgres:
-        specifier: ^3.4.7
+        specifier: ^3.4.9
         version: 3.4.9
       zod:
         specifier: ^3.23.8
