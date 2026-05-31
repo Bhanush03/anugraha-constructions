@@ -691,7 +691,15 @@ async function ensureInitialAdminUser() {
     persistDatabase();
     logger.info({ username: adminUser }, "startup: initial admin user created");
   } catch (e) {
-    logger.error({ err: String(e) }, "startup: users table check failed");
+    logger.error(
+      {
+        error: e,
+        cause: e instanceof Error ? (e as any).cause : undefined,
+        message: e instanceof Error ? e.message : String(e),
+        stack: e instanceof Error ? e.stack : undefined
+      },
+      "startup: users table check failed"
+    );
   }
 }
 
