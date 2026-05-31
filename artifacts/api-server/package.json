@@ -11,6 +11,7 @@
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {
+    "@anugraha/db": "workspace:*",
     "cors": "^2.8.5",
     "drizzle-orm": "^0.44.0",
     "bcryptjs": "^2.4.3",

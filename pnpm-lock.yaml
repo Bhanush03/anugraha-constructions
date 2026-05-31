@@ -130,6 +130,9 @@ importers:
 
   artifacts/api-server:
     dependencies:
+      '@anugraha/db':
+        specifier: workspace:*
+        version: link:../../lib/db
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3

@@ -1,4 +1,4 @@
-import { createDatabaseClient, persistDatabase } from "../../../lib/db/src/index.js";
+import { createDatabaseClient, persistDatabase } from "@anugraha/db";
 
 import { env } from "./env.js";
 
