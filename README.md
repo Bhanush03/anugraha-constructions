@@ -4,7 +4,7 @@ Full-stack monorepo for the Anugraha Constructions landing site and admin API.
 
 Contents
 - Frontend: `artifacts/anugraha` (Vite + React + TypeScript)
-- API server: `artifacts/api-server` (Express + TypeScript + Drizzle ORM + sql.js)
+- API server: [artifacts/api-server](artifacts/api-server) (Express + TypeScript + Drizzle ORM + PostgreSQL)
 - Shared libs: `lib/*` (API client, DB schema, helpers)
 
 This README documents local setup, development, build steps, runtime environment variables, and a safe workflow for pushing the repository to GitHub.
@@ -68,7 +68,7 @@ Create a `.env` file (do NOT commit it). Example variables used by the API:
 Check `.env.example` files in the repo for more fields.
 
 ## Database
-The API uses SQLite via sql.js. The project persists the database to disk when `persistDatabase()` is called. Verify the persistence path in `artifacts/api-server` and ensure the process has write permissions.
+The API uses PostgreSQL via Drizzle ORM and `postgres`. Configure `DATABASE_URL` for a local Postgres instance or a Supabase connection string.
 
 If you want a fresh seeded database (development only):
 
@@ -88,7 +88,6 @@ Ensure these entries exist to avoid committing local artifacts and secrets:
 /node_modules
 /dist
 /build
-/.sqljs
 /*.db
 pnpm-lock.yaml
 ```
@@ -113,7 +112,7 @@ If your environment does not have Git credentials, configure SSH keys or use HTT
 
 ## Troubleshooting
 - If packages fail to install: ensure Node.js version and pnpm are installed.
-- If the API fails to write the DB file: check file system permissions.
+- If the API cannot connect to the database: verify `DATABASE_URL` and that migrations have been applied.
 - If the frontend cannot reach the API: set `VITE_API_URL` to the API base URL in your environment.
 
 ## Next steps I can perform for you

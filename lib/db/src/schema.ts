@@ -1,8 +1,8 @@
-import { relations, sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { relations } from "drizzle-orm";
+import { boolean, integer, pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
 
-export const projects = sqliteTable("projects", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
+export const projects = pgTable("projects", {
+	id: serial("id").primaryKey(),
 	slug: text("slug").notNull().default(""),
 	title: text("title").notNull(),
 	description: text("description").notNull(),
@@ -17,62 +17,62 @@ export const projects = sqliteTable("projects", {
 	images: text("images").notNull(),
 	features: text("features").notNull().default("[]"),
 	amenities: text("amenities").notNull().default("[]"),
-	featured: integer("featured", { mode: "boolean" }).notNull().default(false),
+	featured: boolean("featured").notNull().default(false),
 	phase: text("phase"),
-	createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const services = sqliteTable("services", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
+export const services = pgTable("services", {
+	id: serial("id").primaryKey(),
 	title: text("title").notNull(),
 	description: text("description").notNull(),
 	icon: text("icon").notNull(),
 	features: text("features").notNull(),
 	order: integer("order").notNull().default(0),
-	createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const testimonials = sqliteTable("testimonials", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
+export const testimonials = pgTable("testimonials", {
+	id: serial("id").primaryKey(),
 	clientName: text("client_name").notNull(),
 	clientTitle: text("client_title").notNull(),
 	message: text("message").notNull(),
 	rating: integer("rating").notNull().default(5),
 	avatarUrl: text("avatar_url"),
-	featured: integer("featured", { mode: "boolean" }).notNull().default(false),
-	createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+	featured: boolean("featured").notNull().default(false),
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const callbacks = sqliteTable("callbacks", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
+export const callbacks = pgTable("callbacks", {
+	id: serial("id").primaryKey(),
 	name: text("name").notNull(),
 	phone: text("phone").notNull(),
 	email: text("email"),
 	message: text("message"),
 	status: text("status").notNull().default("pending"),
-	createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const team = sqliteTable("team", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
+export const team = pgTable("team", {
+	id: serial("id").primaryKey(),
 	name: text("name").notNull(),
 	role: text("role").notNull(),
 	bio: text("bio").notNull(),
 	avatarUrl: text("avatar_url"),
 	order: integer("order").notNull().default(0),
-	createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const users = sqliteTable("users", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
+export const users = pgTable("users", {
+	id: serial("id").primaryKey(),
 	username: text("username").notNull(),
 	passwordHash: text("password_hash").notNull(),
 	role: text("role").notNull().default("admin"),
-	createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
-export const siteSettings = sqliteTable("site_settings", {
-	id: integer("id").primaryKey({ autoIncrement: true }),
+export const siteSettings = pgTable("site_settings", {
+	id: serial("id").primaryKey(),
 	overviewBadge: text("overview_badge"),
 	overviewTitle: text("overview_title"),
 	overviewDescription: text("overview_description"),
@@ -82,7 +82,7 @@ export const siteSettings = sqliteTable("site_settings", {
 	teamSize: integer("team_size").notNull().default(0),
 	heroImage: text("hero_image"),
 	logoImage: text("logo_image"),
-	updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`)
+	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
 export const schemaRelations = relations;

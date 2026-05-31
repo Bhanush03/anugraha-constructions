@@ -13,7 +13,6 @@ import crypto from "crypto";
 import { env } from "./env.js";
 import { requireAuth, requireAdmin, signToken } from "./middleware/auth.js";
 import { db, persistDatabase } from "./db.js";
-import { seedDatabase } from "./seed.js";
 import { serializeCallback, serializeProject, serializeService, serializeTeamMember, serializeTestimonial } from "./serializers.js";
 
 const app = express();
@@ -677,11 +676,7 @@ app.delete("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
 
 async function main() {
   logger.info({ databaseUrl: env.DATABASE_URL, jwtSecretPresent: Boolean(env.JWT_SECRET) }, "startup: env");
-  if (typeof seedDatabase === "function") {
-    await seedDatabase();
-  } else {
-    logger.info("DB not configured; skipping database seed.");
-  }
+  logger.info("startup: automatic database seeding disabled");
 
   // post-seed diagnostics: verify users table and admin user count
   try {

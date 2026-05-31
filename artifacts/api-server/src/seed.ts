@@ -1,8 +1,8 @@
-import { and, count, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 
 import { callbacks, projects, services, team, testimonials, siteSettings, users } from "../../../lib/db/src/index.js";
 
-import { db, persistDatabase } from "./db.js";
+import { db } from "./db.js";
 import { env } from "./env.js";
 import crypto from "crypto";
 
@@ -263,98 +263,7 @@ const callbackSeed = [
 ] as const;
 
 async function createTables() {
-  if (!db) return;
-  await db.run(sql`
-    CREATE TABLE IF NOT EXISTS projects (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      slug text NOT NULL DEFAULT '',
-      title text NOT NULL,
-      description text NOT NULL,
-      status text NOT NULL DEFAULT 'ongoing',
-      category text NOT NULL,
-      progress int NOT NULL DEFAULT 0,
-      location text NOT NULL,
-      value text NOT NULL,
-      start_date text NOT NULL,
-      end_date text,
-      image_url text NOT NULL,
-      images text NOT NULL,
-      features text NOT NULL DEFAULT '[]',
-      amenities text NOT NULL DEFAULT '[]',
-      featured integer NOT NULL DEFAULT 0,
-      phase text,
-      created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  try { await db.run(sql`ALTER TABLE projects ADD COLUMN slug text NOT NULL DEFAULT ''`); } catch {}
-  try { await db.run(sql`ALTER TABLE projects ADD COLUMN features text NOT NULL DEFAULT '[]'`); } catch {}
-  try { await db.run(sql`ALTER TABLE projects ADD COLUMN amenities text NOT NULL DEFAULT '[]'`); } catch {}
-
-  await db.run(sql`
-    CREATE TABLE IF NOT EXISTS services (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      title text NOT NULL,
-      description text NOT NULL,
-      icon text NOT NULL,
-      features text NOT NULL,
-      \`order\` int NOT NULL DEFAULT 0,
-      created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  await db.run(sql`
-    CREATE TABLE IF NOT EXISTS testimonials (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      client_name text NOT NULL,
-      client_title text NOT NULL,
-      message text NOT NULL,
-      rating int NOT NULL DEFAULT 5,
-      avatar_url text,
-      featured integer NOT NULL DEFAULT 0,
-      created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  await db.run(sql`
-    CREATE TABLE IF NOT EXISTS callbacks (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      name text NOT NULL,
-      phone text NOT NULL,
-      email text,
-      message text,
-      status text NOT NULL DEFAULT 'pending',
-      created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  await db.run(sql`
-    CREATE TABLE IF NOT EXISTS team (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      name text NOT NULL,
-      role text NOT NULL,
-      bio text NOT NULL,
-      avatar_url text,
-      \`order\` int NOT NULL DEFAULT 0,
-      created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  await db.run(sql`
-    CREATE TABLE IF NOT EXISTS site_settings (
-      id integer PRIMARY KEY AUTOINCREMENT,
-      overview_badge text,
-      overview_title text,
-      overview_description text,
-      total_projects int NOT NULL DEFAULT 0,
-      years_experience int NOT NULL DEFAULT 0,
-      happy_clients int NOT NULL DEFAULT 0,
-      team_size int NOT NULL DEFAULT 0,
-      hero_image text,
-      logo_image text,
-      updated_at text NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  return;
 }
 
 async function maybeSeedTable() {
@@ -406,10 +315,6 @@ async function maybeSeedTable() {
   }
   // Seed admin user: ensure users table exists, then query and insert if empty
   try {
-    // create users table before any queries against it
-    await db.run(`CREATE TABLE IF NOT EXISTS users (id integer PRIMARY KEY AUTOINCREMENT, username text NOT NULL, password_hash text NOT NULL, role text NOT NULL DEFAULT 'admin', created_at text NOT NULL DEFAULT CURRENT_TIMESTAMP)`);
-    console.info("users table created or already exists");
-
     const [{ count: userCount }] = await db.select({ count: count() }).from(users as any);
     const adminUser = env.ADMIN_USERNAME ?? "admin";
     const adminPass = env.ADMIN_PASSWORD ?? "changeme123";
@@ -417,7 +322,6 @@ async function maybeSeedTable() {
       const salt = crypto.randomBytes(16).toString("hex");
       const hash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
       await db.insert(users as any).values({ username: adminUser, passwordHash: hash, role: "admin" });
-      persistDatabase();
       console.info("admin user created", { username: adminUser });
     } else {
       // ensure admin user exists and password is up-to-date
@@ -427,7 +331,6 @@ async function maybeSeedTable() {
         const salt = crypto.randomBytes(16).toString("hex");
         const hash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
         await db.insert(users as any).values({ username: adminUser, passwordHash: hash, role: "admin" });
-        persistDatabase();
         console.info("admin user created (missing username)", { username: adminUser });
       } else {
         // check password; if ADMIN_PASSWORD supplied and doesn't match, update
@@ -444,7 +347,6 @@ async function maybeSeedTable() {
           const salt = crypto.randomBytes(16).toString("hex");
           const newHash = crypto.pbkdf2Sync(adminPass, salt, 100000, 32, "sha256").toString("hex") + ":" + salt;
           await db.update(users as any).set({ passwordHash: newHash }).where(eq(users.username, adminUser));
-          persistDatabase();
           console.info("admin user password updated", { username: adminUser });
         } else {
           console.info("admin user already exists and password matches", { username: adminUser });
