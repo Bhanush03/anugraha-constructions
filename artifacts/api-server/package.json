@@ -8,10 +8,12 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/artifacts/api-server/src/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "seed": "tsx src/seed.ts"
+    "seed": "tsx src/seed.ts",
+    "test:db": "tsx src/test-db.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "@supabase/supabase-js": "^2.50.2",
     "drizzle-orm": "^0.44.0",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.3.1",

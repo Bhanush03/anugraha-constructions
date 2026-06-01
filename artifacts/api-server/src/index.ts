@@ -6,13 +6,11 @@ import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { callbacks, projects, services, team, testimonials, siteSettings, users } from "./db/index.js";
-
-import fs from "fs";
-import path from "path";
 import crypto from "crypto";
 import { env } from "./env.js";
 import { requireAuth, requireAdmin, signToken } from "./middleware/auth.js";
 import { db, persistDatabase } from "./db.js";
+import { normalizeProjectImage, saveDataUrlImage } from "./storage/supabase.js";
 import { serializeCallback, serializeProject, serializeService, serializeTeamMember, serializeTestimonial } from "./serializers.js";
 
 const app = express();
@@ -158,47 +156,28 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Settings persistence (simple JSON file + image save from data URLs)
-const SETTINGS_FILE = path.join(process.cwd(), "site-settings.json");
-const FRONTEND_IMAGES_DIR = path.join(process.cwd(), "..", "anugraha", "public", "images");
-
-function writeSettings(data: any) {
-  fs.writeFileSync(SETTINGS_FILE, JSON.stringify(data, null, 2), "utf-8");
-}
-
-function readSettings() {
-  try {
-    return JSON.parse(fs.readFileSync(SETTINGS_FILE, "utf-8"));
-  } catch {
-    return {};
-  }
-}
-
-function saveDataUrlImage(dataUrl: string, filename: string) {
-  if (!dataUrl || !dataUrl.startsWith("data:")) return null;
-  const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-  if (!matches) return null;
-  const [, mime, b64] = matches;
-  const ext = mime.split("/")[1];
-  const targetName = filename.endsWith(`.${ext}`) ? filename : `${filename}.${ext}`;
-  const outPath = path.join(FRONTEND_IMAGES_DIR, targetName);
-  const buffer = Buffer.from(b64, "base64");
-  fs.mkdirSync(FRONTEND_IMAGES_DIR, { recursive: true });
-  fs.writeFileSync(outPath, buffer);
-  return `/images/${targetName}`;
-}
-
-function normalizeProjectImage(imageValue: string | undefined | null, filename: string) {
-  if (!imageValue) return imageValue;
-  if (imageValue.startsWith("data:")) {
-    const saved = saveDataUrlImage(imageValue, filename);
-    return saved ?? imageValue;
-  }
-  return imageValue;
-}
-
 function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function mapSiteSettings(row: typeof siteSettings.$inferSelect) {
+  return {
+    overviewBadge: row.overviewBadge,
+    overviewTitle: row.overviewTitle,
+    overviewDescription: row.overviewDescription,
+    totalProjects: Number(row.totalProjects ?? 0),
+    yearsExperience: Number(row.yearsExperience ?? 0),
+    happyClients: Number(row.happyClients ?? 0),
+    teamSize: Number(row.teamSize ?? 0),
+    heroImage: row.heroImage,
+    logoImage: row.logoImage,
+    updatedAt: row.updatedAt
+  };
+}
+
+async function getLatestSiteSettingsRow() {
+  const [row] = await db.select().from(siteSettings as any).orderBy(desc((siteSettings as any).id)).limit(1);
+  return row ?? null;
 }
 
 const siteSettingsInputSchema = z.object({
@@ -214,53 +193,31 @@ const siteSettingsInputSchema = z.object({
 });
 
 app.get("/api/settings", async (_req, res) => {
-  // Try DB first, then fallback to JSON file for older installs
   try {
-    if (db) {
-      const [row] = await db.select().from(siteSettings as any).orderBy(desc((siteSettings as any).id)).limit(1);
-      if (row) {
-        return res.json({
-          overviewBadge: (row as any).overviewBadge,
-          overviewTitle: (row as any).overviewTitle,
-          overviewDescription: (row as any).overviewDescription,
-          totalProjects: Number((row as any).totalProjects ?? 0),
-          yearsExperience: Number((row as any).yearsExperience ?? 0),
-          happyClients: Number((row as any).happyClients ?? 0),
-          teamSize: Number((row as any).teamSize ?? 0),
-          heroImage: (row as any).heroImage,
-          logoImage: (row as any).logoImage,
-          updatedAt: (row as any).updatedAt
-        });
-      }
+    const row = await getLatestSiteSettingsRow();
+    if (row) {
+      return res.json(mapSiteSettings(row as typeof siteSettings.$inferSelect));
     }
   } catch (e) {
-    console.error("Error reading site settings from DB, falling back to file-based settings:", e);
+    console.error("Error reading site settings from DB:", e);
   }
-  res.json(readSettings());
+
+  res.json({});
 });
 
 app.put("/api/settings", requireAuth, requireAdmin, async (req, res) => {
   try {
     const payload = siteSettingsInputSchema.parse(req.body || {});
-    // handle data-url images
     if (typeof payload.heroImage === "string" && payload.heroImage.startsWith("data:")) {
-      const saved = saveDataUrlImage(payload.heroImage, "hero-bg");
+      const saved = await saveDataUrlImage(payload.heroImage, "settings/hero-bg");
       if (saved) (payload as any).heroImage = saved;
     }
     if (typeof payload.logoImage === "string" && payload.logoImage.startsWith("data:")) {
-      const saved = saveDataUrlImage(payload.logoImage, "logo-small");
+      const saved = await saveDataUrlImage(payload.logoImage, "settings/logo-small");
       if (saved) (payload as any).logoImage = saved;
     }
 
-    if (!db) {
-      // fallback to file-based settings
-      const next = { ...readSettings(), ...payload };
-      writeSettings(next);
-      return res.json(next);
-    }
-
-    // upsert: update latest row if exists, otherwise insert
-    const [existing] = await db.select().from(siteSettings as any).orderBy(desc((siteSettings as any).id)).limit(1);
+    const existing = await getLatestSiteSettingsRow();
     if (existing) {
       await db.update(siteSettings as any).set({
         overviewBadge: (payload as any).overviewBadge ?? existing.overviewBadge,
@@ -290,18 +247,7 @@ app.put("/api/settings", requireAuth, requireAdmin, async (req, res) => {
 
     const [row] = await db.select().from(siteSettings as any).orderBy(desc((siteSettings as any).id)).limit(1);
     persistDatabase();
-    return res.json({
-      overviewBadge: (row as any).overviewBadge,
-      overviewTitle: (row as any).overviewTitle,
-      overviewDescription: (row as any).overviewDescription,
-      totalProjects: Number((row as any).totalProjects ?? 0),
-      yearsExperience: Number((row as any).yearsExperience ?? 0),
-      happyClients: Number((row as any).happyClients ?? 0),
-      teamSize: Number((row as any).teamSize ?? 0),
-      heroImage: (row as any).heroImage,
-      logoImage: (row as any).logoImage,
-      updatedAt: (row as any).updatedAt
-    });
+    return res.json(mapSiteSettings(row as typeof siteSettings.$inferSelect));
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: "validation", issues: err.errors });
     throw err;
@@ -386,11 +332,14 @@ app.post("/api/projects", requireAuth, requireAdmin, async (req, res) => {
     const payload = projectInputSchema.parse(req.body);
     const galleryImages = payload.galleryImages ?? payload.images ?? [];
     const { images, features, amenities, galleryImages: _galleryImages, ...basePayload } = payload;
+    const uploadedGalleryImages = await Promise.all(
+      galleryImages.map((image, index) => normalizeProjectImage(image, `projects/project-${Date.now()}-${index + 1}`))
+    );
     const nextPayload = {
       ...basePayload,
       slug: payload.slug ?? slugify(payload.title),
-      imageUrl: normalizeProjectImage(payload.imageUrl, `project-${Date.now()}-cover`) ?? payload.imageUrl,
-      images: JSON.stringify(galleryImages.map((image, index) => normalizeProjectImage(image, `project-${Date.now()}-${index + 1}`) ?? image)),
+      imageUrl: (await normalizeProjectImage(payload.imageUrl, `projects/project-${Date.now()}-cover`)) ?? payload.imageUrl,
+      images: JSON.stringify(uploadedGalleryImages.map((image) => image ?? "")),
       features: JSON.stringify(features ?? []),
       amenities: JSON.stringify(amenities ?? []),
       featured: Boolean(payload.featured)
@@ -411,11 +360,14 @@ app.patch("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
     const payload = projectInputSchema.partial().parse(req.body);
     const galleryImages = payload.galleryImages ?? payload.images;
     const { images, features, amenities, galleryImages: _galleryImages, ...basePayload } = payload;
+    const uploadedGalleryImages = Array.isArray(galleryImages)
+      ? await Promise.all(galleryImages.map((image, index) => normalizeProjectImage(image, `projects/project-${id}-${index + 1}`)))
+      : undefined;
     const nextPayload = {
       ...basePayload,
       ...(typeof payload.slug === "string" ? { slug: payload.slug } : {}),
-      ...(typeof payload.imageUrl === "string" ? { imageUrl: normalizeProjectImage(payload.imageUrl, `project-${id}-cover`) ?? payload.imageUrl } : {}),
-      ...(Array.isArray(galleryImages) ? { images: JSON.stringify(galleryImages.map((image, index) => normalizeProjectImage(image, `project-${id}-${index + 1}`) ?? image)) } : {}),
+      ...(typeof payload.imageUrl === "string" ? { imageUrl: (await normalizeProjectImage(payload.imageUrl, `projects/project-${id}-cover`)) ?? payload.imageUrl } : {}),
+      ...(Array.isArray(uploadedGalleryImages) ? { images: JSON.stringify(uploadedGalleryImages.map((image) => image ?? "")) } : {}),
       ...(Array.isArray(features) ? { features: JSON.stringify(features) } : {}),
       ...(Array.isArray(amenities) ? { amenities: JSON.stringify(amenities) } : {}),
       ...(typeof payload.featured === "boolean" ? { featured: payload.featured } : {})
@@ -447,9 +399,8 @@ app.post("/api/services", requireAuth, requireAdmin, async (req, res) => {
   console.log("POST /api/services body size:", req.headers["content-length"], "content-type:", req.headers["content-type"]);
   console.log("POST /api/services body preview:", String(req.body).slice(0, 400));
   const payload = serviceInputSchema.parse(req.body);
-  // handle data-url icon uploads
   if (typeof payload.icon === "string" && payload.icon.startsWith("data:")) {
-    const saved = saveDataUrlImage(payload.icon, `service-${Date.now()}`);
+    const saved = await saveDataUrlImage(payload.icon, `services/service-${Date.now()}`);
     if (saved) payload.icon = saved;
   }
   await db.insert(services).values({ ...payload, features: JSON.stringify(payload.features) });
@@ -463,7 +414,7 @@ app.patch("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   const payload = serviceInputSchema.partial().parse(req.body);
   if (typeof payload.icon === "string" && payload.icon.startsWith("data:")) {
-    const saved = saveDataUrlImage(payload.icon, `service-${id}`);
+    const saved = await saveDataUrlImage(payload.icon, `services/service-${id}`);
     if (saved) payload.icon = saved;
   }
   const { features, ...basePayload } = payload;
@@ -493,7 +444,7 @@ app.get("/api/testimonials", async (_req, res) => {
 app.post("/api/testimonials", requireAuth, requireAdmin, async (req, res) => {
   const payload = testimonialInputSchema.parse(req.body);
   if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
-    const saved = saveDataUrlImage(payload.avatarUrl, `testimonial-${Date.now()}`);
+    const saved = await saveDataUrlImage(payload.avatarUrl, `testimonials/testimonial-${Date.now()}`);
     if (saved) payload.avatarUrl = saved;
   }
   await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) });
@@ -536,12 +487,10 @@ app.post("/api/callbacks", requireAuth, requireAdmin, async (req, res) => {
   persistDatabase();
   // notify owner via WhatsApp if configured
   try {
-    const settings = readSettings();
-    // allow site-settings.json to enable/disable notifications and override API details
-    const enabledInSettings = settings.whatsappEnabled !== undefined ? Boolean(settings.whatsappEnabled) : true;
-    const owner = (settings.whatsappOwnerNumber as string) || env.WHATSAPP_OWNER_NUMBER;
-    const apiUrl = (settings.whatsappApiUrl as string) || env.WHATSAPP_API_URL;
-    const token = (settings.whatsappApiToken as string) || env.WHATSAPP_API_TOKEN;
+    const enabledInSettings = true;
+    const owner = env.WHATSAPP_OWNER_NUMBER;
+    const apiUrl = env.WHATSAPP_API_URL;
+    const token = env.WHATSAPP_API_TOKEN;
     if (enabledInSettings && owner && apiUrl) {
       const text = `New callback request:\nName: ${payload.name}\nPhone: ${payload.phone}\nEmail: ${payload.email || "N/A"}\nMessage: ${payload.message || "N/A"}`;
       try {
@@ -586,11 +535,10 @@ app.post("/api/public/callbacks", async (req, res) => {
 
     // notify owner via WhatsApp if configured
     try {
-      const settings = readSettings();
-      const enabledInSettings = settings.whatsappEnabled !== undefined ? Boolean(settings.whatsappEnabled) : true;
-      const owner = (settings.whatsappOwnerNumber as string) || env.WHATSAPP_OWNER_NUMBER;
-      const apiUrl = (settings.whatsappApiUrl as string) || env.WHATSAPP_API_URL;
-      const token = (settings.whatsappApiToken as string) || env.WHATSAPP_API_TOKEN;
+      const enabledInSettings = true;
+      const owner = env.WHATSAPP_OWNER_NUMBER;
+      const apiUrl = env.WHATSAPP_API_URL;
+      const token = env.WHATSAPP_API_TOKEN;
       if (enabledInSettings && owner && apiUrl) {
         const text = `New callback request:\nName: ${payload.name}\nPhone: ${payload.phone}\nEmail: ${payload.email || "N/A"}\nMessage: ${payload.message || "N/A"}`;
         try {
@@ -648,7 +596,7 @@ app.get("/api/team", async (_req, res) => {
 app.post("/api/team", requireAuth, requireAdmin, async (req, res) => {
   const payload = teamInputSchema.parse(req.body);
   if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
-    const saved = saveDataUrlImage(payload.avatarUrl, `team-${Date.now()}`);
+    const saved = await saveDataUrlImage(payload.avatarUrl, `team/team-${Date.now()}`);
     if (saved) payload.avatarUrl = saved;
   }
   await db.insert(team).values(payload);
