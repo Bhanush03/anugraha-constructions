@@ -691,12 +691,24 @@ async function ensureInitialAdminUser() {
     persistDatabase();
     logger.info({ username: adminUser }, "startup: initial admin user created");
   } catch (e) {
+      const cause = e instanceof Error ? (e as any).cause : undefined;
+      const pgError = (cause ?? e) as any;
     logger.error(
       {
         error: e,
-        cause: e instanceof Error ? (e as any).cause : undefined,
-        message: e instanceof Error ? e.message : String(e),
-        stack: e instanceof Error ? e.stack : undefined
+          cause,
+          message: e instanceof Error ? e.message : String(e),
+          stack: e instanceof Error ? e.stack : undefined,
+          code: pgError?.code,
+          severity: pgError?.severity,
+          severity_local: pgError?.severity_local,
+          detail: pgError?.detail,
+          hint: pgError?.hint,
+          where: pgError?.where,
+          schema: pgError?.schema,
+          table: pgError?.table,
+          column: pgError?.column,
+          constraint: pgError?.constraint
       },
       "startup: users table check failed"
     );
