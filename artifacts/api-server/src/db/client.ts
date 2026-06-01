@@ -7,11 +7,25 @@ let cachedDatabaseUrl: string | undefined;
 let cachedDatabase: any;
 
 function createPostgresClient(databaseUrl: string) {
-	const isSupabasePooler = databaseUrl.includes("pgbouncer=true") || databaseUrl.includes("supabase.co") || databaseUrl.includes(":6543");
-	return postgres(databaseUrl, {
+	const isSupabasePooler =
+		databaseUrl.includes("pgbouncer=true") ||
+		databaseUrl.includes("supabase.co") ||
+		databaseUrl.includes("supabase.com") ||
+		databaseUrl.includes("pooler") ||
+		databaseUrl.includes(":6543");
+	const connectionUrl = new URL(databaseUrl);
+	if (!connectionUrl.searchParams.has("options")) {
+		connectionUrl.searchParams.set("options", "-c search_path=public");
+	}
+
+	return postgres(connectionUrl.toString(), {
 		prepare: false,
 		max: isSupabasePooler ? 1 : 10,
-		ssl: isSupabasePooler ? "require" : undefined
+		ssl: isSupabasePooler
+			? {
+				rejectUnauthorized: false
+			}
+			: undefined,
 	});
 }
 
