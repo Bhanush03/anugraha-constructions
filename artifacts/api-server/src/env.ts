@@ -18,6 +18,4 @@ const envSchema = z.object({
   WHATSAPP_API_TOKEN: z.string().optional(),
   WHATSAPP_OWNER_NUMBER: z.string().optional()
 });
-console.log("DB HOST:", dbUrl.hostname);
-console.log("DB PORT:", dbUrl.port);
 export const env = envSchema.parse(process.env);
