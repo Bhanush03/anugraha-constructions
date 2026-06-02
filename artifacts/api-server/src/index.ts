@@ -539,6 +539,7 @@ app.post("/api/public/callbacks", async (req, res) => {
       const owner = env.WHATSAPP_OWNER_NUMBER;
       const apiUrl = env.WHATSAPP_API_URL;
       const token = env.WHATSAPP_API_TOKEN;
+      console.log("Before WhatsApp");
       if (enabledInSettings && owner && apiUrl) {
         const text = `New callback request:\nName: ${payload.name}\nPhone: ${payload.phone}\nEmail: ${payload.email || "N/A"}\nMessage: ${payload.message || "N/A"}`;
         try {
