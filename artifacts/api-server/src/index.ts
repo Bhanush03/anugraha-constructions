@@ -680,9 +680,9 @@ async function main() {
   logger.info({ databaseUrl: env.DATABASE_URL, jwtSecretPresent: Boolean(env.JWT_SECRET) }, "startup: env");
   logger.info("startup: automatic database seeding disabled");
 
-  await ensureInitialAdminUser();
+  // await ensureInitialAdminUser();
 
-  persistDatabase();
+  // persistDatabase();
   const port = Number(process.env.PORT ?? 3001);
   app.listen(port, () => {
     logger.info({ port }, `API server listening`);
