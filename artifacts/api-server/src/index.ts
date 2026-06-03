@@ -532,8 +532,8 @@ app.post("/api/public/callbacks", async (req, res) => {
       email: payload.email || null,
       message: payload.message || null
     });
-    const [inserted] = await db.select().from(callbacks).orderBy(desc(callbacks.id)).limit(1);
-    persistDatabase();
+    // const [inserted] = await db.select().from(callbacks).orderBy(desc(callbacks.id)).limit(1);
+    // persistDatabase();
 
     // notify owner via WhatsApp if configured
     try {
