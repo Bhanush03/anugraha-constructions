@@ -564,7 +564,7 @@ app.post("/api/public/callbacks", async (req, res) => {
       logger.error({ err: String(notifyErr) }, "whatsapp_notify_error_public");
     }
     console.log("After WhatsApp");
-    res.status(201).json(mapCallback(inserted));
+    res.status(201).send("OK DONE);
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: "validation", issues: err.errors });
     throw err;
