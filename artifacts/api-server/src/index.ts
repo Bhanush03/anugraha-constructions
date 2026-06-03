@@ -404,10 +404,12 @@ app.post("/api/services", requireAuth, requireAdmin, async (req, res) => {
     if (saved) payload.icon = saved;
   }
   await db.insert(services).values({ ...payload, features: JSON.stringify(payload.features) });
-  const [inserted] = await db.select().from(services).orderBy(desc(services.id)).limit(1);
-  persistDatabase();
-  console.log("Service inserted", { id: inserted?.id, title: (inserted as any)?.title });
-  res.status(201).json(mapService(inserted));
+  // const [inserted] = await db.select().from(services).orderBy(desc(services.id)).limit(1);
+  // persistDatabase();
+ return res.status(201).json({
+  success: true,
+  message: "Service created successfully"
+});
 });
 
 app.patch("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
@@ -442,17 +444,19 @@ app.get("/api/testimonials", async (_req, res) => {
 });
 
 app.post("/api/testimonials", requireAuth, requireAdmin, async (req, res) => {
-  // const payload = testimonialInputSchema.parse(req.body);
-  // if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
-  //   const saved = await saveDataUrlImage(payload.avatarUrl, `testimonials/testimonial-${Date.now()}`);
-  //   if (saved) payload.avatarUrl = saved;
-  // }
-  // await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) });
+  const payload = testimonialInputSchema.parse(req.body);
+  if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
+    const saved = await saveDataUrlImage(payload.avatarUrl, `testimonials/testimonial-${Date.now()}`);
+    if (saved) payload.avatarUrl = saved;
+  }
+  await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) });
   // const [inserted] = await db.select().from(testimonials).orderBy(desc(testimonials.id)).limit(1);
   // persistDatabase();
   // res.status(201).json(mapTestimonial(inserted));
-   const list = await db.select().from(testimonials).orderBy(desc(testimonials.createdAt));
-  res.json(list);
+    return res.status(201).json({
+    success: true,
+    message: "Testimonial created successfully"
+  });
 });
 
 app.patch("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) => {
@@ -485,8 +489,8 @@ app.post("/api/callbacks", requireAuth, requireAdmin, async (req, res) => {
     email: payload.email || null,
     message: payload.message || null
   });
-  const [inserted] = await db.select().from(callbacks).orderBy(desc(callbacks.id)).limit(1);
-  persistDatabase();
+  // const [inserted] = await db.select().from(callbacks).orderBy(desc(callbacks.id)).limit(1);
+  // persistDatabase();
   // notify owner via WhatsApp if configured
   try {
     const enabledInSettings = true;
@@ -518,7 +522,10 @@ app.post("/api/callbacks", requireAuth, requireAdmin, async (req, res) => {
   } catch (notifyErr) {
     logger.error({ err: String(notifyErr) }, "whatsapp_notify_error");
   }
-  res.status(201).json(mapCallback(inserted));
+  return res.status(201).json({
+  success: true,
+  message: "Callback created successfully"
+});
 });
 
 // Public callback endpoint: accepts unauthenticated submissions from the public
