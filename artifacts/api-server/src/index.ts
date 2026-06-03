@@ -246,7 +246,7 @@ app.put("/api/settings", requireAuth, requireAdmin, async (req, res) => {
     }
 
     const [row] = await db.select().from(siteSettings as any).orderBy(desc((siteSettings as any).id)).limit(1);
-    persistDatabase();
+    // persistDatabase();
     return res.json(mapSiteSettings(row as typeof siteSettings.$inferSelect));
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: "validation", issues: err.errors });
@@ -375,7 +375,7 @@ app.patch("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
     await db.update(projects).set(nextPayload).where(eq(projects.id, id));
     const [updated] = await db.select().from(projects).where(eq(projects.id, id));
     if (!updated) return res.status(404).json(notFound("Project not found"));
-    persistDatabase();
+    // persistDatabase();
     res.json(mapProject(updated));
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: "validation", issues: err.errors });
@@ -386,7 +386,7 @@ app.patch("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
 app.delete("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   await db.delete(projects).where(eq(projects.id, id));
-  persistDatabase();
+  // persistDatabase();
   res.status(204).end();
 });
 
@@ -427,14 +427,14 @@ app.patch("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
   await db.update(services).set(nextServicePayload).where(eq(services.id, id));
   const [updated] = await db.select().from(services).where(eq(services.id, id));
   if (!updated) return res.status(404).json(notFound("Service not found"));
-  persistDatabase();
+  // persistDatabase();
   res.json(mapService(updated));
 });
 
 app.delete("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   await db.delete(services).where(eq(services.id, id));
-  persistDatabase();
+  // persistDatabase();
   res.status(204).end();
 });
 
@@ -465,14 +465,14 @@ app.patch("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) =
   await db.update(testimonials).set({ ...payload, ...(typeof payload.featured === "boolean" ? { featured: payload.featured } : {}) }).where(eq(testimonials.id, id));
   const [updated] = await db.select().from(testimonials).where(eq(testimonials.id, id));
   if (!updated) return res.status(404).json(notFound("Testimonial not found"));
-  persistDatabase();
+  // persistDatabase();
   res.json(mapTestimonial(updated));
 });
 
 app.delete("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   await db.delete(testimonials).where(eq(testimonials.id, id));
-  persistDatabase();
+  // persistDatabase();
   res.status(204).end();
 });
 
@@ -590,14 +590,14 @@ app.patch("/api/callbacks/:id", requireAuth, requireAdmin, async (req, res) => {
   await db.update(callbacks).set(payload).where(eq(callbacks.id, id));
   const [updated] = await db.select().from(callbacks).where(eq(callbacks.id, id));
   if (!updated) return res.status(404).json(notFound("Callback not found"));
-  persistDatabase();
+  // persistDatabase();
   res.json(mapCallback(updated));
 });
 
 app.delete("/api/callbacks/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   await db.delete(callbacks).where(eq(callbacks.id, id));
-  persistDatabase();
+  // persistDatabase();
   res.status(204).end();
 });
 
@@ -614,7 +614,7 @@ app.post("/api/team", requireAuth, requireAdmin, async (req, res) => {
   }
   await db.insert(team).values(payload);
   const [inserted] = await db.select().from(team).orderBy(desc(team.id)).limit(1);
-  persistDatabase();
+  // persistDatabase();
   res.status(201).json(mapTeamMember(inserted));
 });
 
@@ -624,14 +624,14 @@ app.patch("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
   await db.update(team).set(payload).where(eq(team.id, id));
   const [updated] = await db.select().from(team).where(eq(team.id, id));
   if (!updated) return res.status(404).json(notFound("Team member not found"));
-  persistDatabase();
+  // persistDatabase();
   res.json(mapTeamMember(updated));
 });
 
 app.delete("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   await db.delete(team).where(eq(team.id, id));
-  persistDatabase();
+  // persistDatabase();
   res.status(204).end();
 });
 
