@@ -20,7 +20,7 @@ function createPostgresClient(databaseUrl: string) {
 
 	return postgres(connectionUrl.toString(), {
 		prepare: false,
-		max: isSupabasePooler ? 1 : 10,
+		max: isSupabasePooler ? 6 : 10,
 		ssl: isSupabasePooler
 			? {
 				rejectUnauthorized: false
