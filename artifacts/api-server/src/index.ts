@@ -442,15 +442,17 @@ app.get("/api/testimonials", async (_req, res) => {
 });
 
 app.post("/api/testimonials", requireAuth, requireAdmin, async (req, res) => {
-  const payload = testimonialInputSchema.parse(req.body);
-  if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
-    const saved = await saveDataUrlImage(payload.avatarUrl, `testimonials/testimonial-${Date.now()}`);
-    if (saved) payload.avatarUrl = saved;
-  }
-  await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) });
-  const [inserted] = await db.select().from(testimonials).orderBy(desc(testimonials.id)).limit(1);
-  persistDatabase();
-  res.status(201).json(mapTestimonial(inserted));
+  // const payload = testimonialInputSchema.parse(req.body);
+  // if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
+  //   const saved = await saveDataUrlImage(payload.avatarUrl, `testimonials/testimonial-${Date.now()}`);
+  //   if (saved) payload.avatarUrl = saved;
+  // }
+  // await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) });
+  // const [inserted] = await db.select().from(testimonials).orderBy(desc(testimonials.id)).limit(1);
+  // persistDatabase();
+  // res.status(201).json(mapTestimonial(inserted));
+   const list = await db.select().from(testimonials).orderBy(desc(testimonials.createdAt));
+  res.json(list);
 });
 
 app.patch("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) => {
