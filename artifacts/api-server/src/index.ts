@@ -18,6 +18,12 @@ app.use(cors());
 // Increase JSON body size to allow data URL image uploads from admin UI
 app.use(express.json({ limit: "10mb" }));
 const logger = pino();
+
+app.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
+  next();
+});
+
 app.use((req, res, next) => {
   const startedAt = Date.now();
   res.on("finish", () => {
