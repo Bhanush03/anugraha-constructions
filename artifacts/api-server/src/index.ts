@@ -564,8 +564,10 @@ app.post("/api/public/callbacks", async (req, res) => {
       logger.error({ err: String(notifyErr) }, "whatsapp_notify_error_public");
     }
     console.log("After WhatsApp");
-    console.log("Inserted:", inserted);
-    res.status(201).json(inserted);
+    res.status(201).json({
+  success: true,
+  message: "Saved successfully"
+});
   } catch (err) {
     if (err instanceof z.ZodError) return res.status(400).json({ error: "validation", issues: err.errors });
     throw err;
