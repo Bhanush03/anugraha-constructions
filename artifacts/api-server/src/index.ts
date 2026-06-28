@@ -317,28 +317,15 @@ app.get("/api/projects", async (req, res) => {
 });
 
 app.get("/api/projects/featured", async (_req, res) => {
-  try {
-    const list = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.featured, true))
-      .orderBy(desc(projects.createdAt));
+  const list = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.featured, true))
+    .orderBy(desc(projects.createdAt));
 
-    // Debug log (optional)
-    console.log(
-      list.map((p) => ({
-        id: p.id,
-        title: p.title,
-        imageUrl: p.imageUrl,
-      }))
-    );
+  console.log(list.map((p) => ({ id: p.id, title: p.title })));
 
-    // Use your serializer (best practice)
-    res.json(list.map(mapProject));
-  } catch (error) {
-    console.error("Error fetching featured projects:", error);
-    res.status(500).json({ error: "failed_to_fetch_featured_projects" });
-  }
+  res.json(list.map(mapProject));
 });
 
   res.json(list.map(mapProject));
