@@ -143,6 +143,7 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number; 
 }
 
 function ProjectCard({ project, onViewDetails }: { project: { id: number; title: string; description: string; category: string; status: string; progress: number; location: string; imageUrl: string; value: string; phase?: string | null; featured: boolean }; onViewDetails: () => void }) {
+    console.log("Project image:", project.imageUrl);
   return (
     <motion.div whileHover={{ y: -8 }} className="group overflow-hidden rounded-[28px] border border-white/10 bg-white/80 shadow-[0_10px_40px_rgba(7,27,52,0.12)] backdrop-blur-xl dark:bg-white/5">
       <div className="relative h-64 overflow-hidden">
