@@ -317,16 +317,22 @@ app.get("/api/projects", async (req, res) => {
 });
 
 app.get("/api/projects/featured", async (_req, res) => {
-  const list = await db.select().from(projects).where(eq(projects.featured, true)).orderBy(desc(projects.createdAt));
+  const list = await db
+    .select()
+    .from(projects)
+    .where(eq(projects.featured, true))
+    .orderBy(desc(projects.createdAt));
+
   console.log(
-  list.map(p => ({
-    id: p.id,
-    title: p.title,
-    imageUrl: p.imageUrl,
-  }));
+    list.map((p) => ({
+      id: p.id,
+      title: p.title,
+      imageUrl: p.imageUrl,
+    }))
+  );
+
   res.json(list.map(mapProject));
 });
-
 app.get("/api/projects/ongoing", async (_req, res) => {
   const list = await db.select().from(projects).where(eq(projects.status, "ongoing")).orderBy(desc(projects.createdAt));
   res.json(list.map(mapProject));
