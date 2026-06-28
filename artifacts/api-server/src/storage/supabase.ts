@@ -4,7 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 import { env } from "../env.js";
 
-const BUCKET_NAME = "project-image";
+const BUCKET_NAME = "project-image".trim();
 
 let supabaseClient: ReturnType<typeof createClient> | null = null;
 
