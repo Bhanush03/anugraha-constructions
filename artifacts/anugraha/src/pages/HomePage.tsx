@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type SyntheticEvent } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
@@ -54,21 +54,21 @@ import {
   usePublicStats,
   useServices,
   useTestimonials,
+  useTeam,
   useSiteSettings
 } from "@anugraha/api-client-react";
+
+const imagePlaceholder = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600' viewBox='0 0 800 600'%3E%3Crect width='800' height='600' fill='%23e8eef7'/%3E%3Cpath d='M250 390l95-105 70 75 55-55 90 85H250z' fill='%2393a4ba'/%3E%3Ccircle cx='505' cy='215' r='42' fill='%2393a4ba'/%3E%3C/svg%3E";
+
+function withImageFallback(event: SyntheticEvent<HTMLImageElement>) {
+  if (event.currentTarget.src !== imagePlaceholder) event.currentTarget.src = imagePlaceholder;
+}
 
 const navLinks = [
   { label: "Home", href: "#home" },
   { label: "Projects", href: "#projects" },
   { label: "Services", href: "#services" },
   { label: "Contact", href: "#contact" }
-];
-
-const socialLinks = [
-  { label: "WhatsApp", href: "https://wa.me/919743042978", icon: MessageCircle },
-  { label: "Instagram", href: "https://instagram.com/anugrahaconstruction_", icon: Instagram },
-  { label: "Call Owner", href: "tel:+919743042978", icon: Phone },
-  { label: "Call Office", href: "tel:+918217585387", icon: Phone }
 ];
 
 const serviceIcons = {
@@ -143,12 +143,10 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: number; 
 }
 
 function ProjectCard({ project, onViewDetails }: { project: { id: number; title: string; description: string; category: string; status: string; progress: number; location: string; imageUrl: string; value: string; phase?: string | null; featured: boolean }; onViewDetails: () => void }) {
-    console.log("Project image:", project.imageUrl);
-    console.log("Project Title :", project.title);
   return (
     <motion.div whileHover={{ y: -8 }} className="group overflow-hidden rounded-[28px] border border-white/10 bg-white/80 shadow-[0_10px_40px_rgba(7,27,52,0.12)] backdrop-blur-xl dark:bg-white/5">
       <div className="relative h-64 overflow-hidden">
-        <img src={project.imageUrl} alt={project.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        <img src={project.imageUrl || imagePlaceholder} onError={withImageFallback} alt={project.title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#071b34] via-transparent to-transparent" />
         <div className="absolute left-4 top-4 flex gap-2">
           <Badge tone={project.status === "completed" ? "success" : "warning"}>{project.status}</Badge>
@@ -183,7 +181,7 @@ function ServiceCard({ service }: { service: { id: number; title: string; descri
   return (
     <motion.div whileHover={{ y: -8 }} className="glass rounded-[28px] border border-white/10 p-6 text-slate-800 dark:text-white shadow-2xl">
       <div className="mb-4 flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl bg-white/10">
-        {isImageSource ? <img src={service.icon} alt={service.title} className="h-full w-full object-cover" /> : <Icon className="h-7 w-7 text-slate-800 dark:text-white" />}
+        {isImageSource ? <img src={service.icon} onError={withImageFallback} alt={service.title} className="h-full w-full object-cover" /> : <Icon className="h-7 w-7 text-slate-800 dark:text-white" />}
       </div>
       <h3 className="text-2xl font-semibold text-slate-900 dark:text-white">{service.title}</h3>
       <p className="mt-3 text-sm leading-6 text-slate-700 dark:text-white/70">{service.description}</p>
@@ -213,6 +211,30 @@ function TestimonialCard({ testimonial }: { testimonial: { clientName: string; c
   );
 }
 
+function TeamCard({ member }: { member: { name: string; role: string; bio: string; avatarUrl?: string | null; socialLinks?: Record<string, string> } }) {
+  return (
+    <Card className="group overflow-hidden rounded-[28px] border border-white/10 bg-white shadow-xl dark:bg-white/5">
+      <div className="aspect-[4/3] overflow-hidden bg-slate-100">
+        <img src={member.avatarUrl || imagePlaceholder} onError={withImageFallback} alt={member.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+      </div>
+      <CardContent className="p-6">
+        <h3 className="text-2xl font-semibold text-[#071b34] dark:text-white">{member.name}</h3>
+        <p className="mt-1 text-sm font-semibold uppercase tracking-[0.2em] text-primary">{member.role}</p>
+        <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-white/70">{member.bio}</p>
+        {member.socialLinks && Object.keys(member.socialLinks).length ? (
+          <div className="mt-5 flex flex-wrap gap-2">
+            {Object.entries(member.socialLinks).map(([label, url]) => (
+              <a key={label} href={url} target="_blank" rel="noreferrer" className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold capitalize text-slate-600 transition hover:border-primary hover:text-primary dark:border-white/10 dark:text-white/70">
+                {label}
+              </a>
+            ))}
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function HomePage() {
   const [, navigate] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -233,6 +255,7 @@ export default function HomePage() {
   const ongoingQuery = useOngoingProjects();
   const servicesQuery = useServices();
   const testimonialsQuery = useTestimonials();
+  const teamQuery = useTeam();
   const callbackMutation = useCreateCallback();
 
   useEffect(() => {
@@ -317,14 +340,28 @@ export default function HomePage() {
   const [heroImageSrc, setHeroImageSrc] = useState<string>(
     typeof effectiveSettings.heroImage === "string" ? effectiveSettings.heroImage : "/images/hero-bg.jpeg"
   );
+  useEffect(() => {
+    setHeroImageSrc(typeof effectiveSettings.heroImage === "string" && effectiveSettings.heroImage
+      ? effectiveSettings.heroImage
+      : "/images/hero-bg.jpeg");
+  }, [effectiveSettings.heroImage]);
   const logoImage = typeof effectiveSettings.logoImage === "string" ? effectiveSettings.logoImage : "/images/logo-small.png";
 
   // Office & map overrides (editable from Admin Settings)
   const mapsUrl = typeof effectiveSettings.mapsUrl === "string" ? effectiveSettings.mapsUrl : "https://maps.app.goo.gl/eFWv8LbsT6YXw1VH8";
   const officeName = typeof effectiveSettings.officeName === "string" ? effectiveSettings.officeName : "Shivakripa building";
   const officeAddress = typeof effectiveSettings.officeAddress === "string" ? effectiveSettings.officeAddress : "APMC ROAD, near City hospital, Puttur, Karnataka 574201";
+  const ownerPhone = typeof effectiveSettings.ownerPhone === "string" ? effectiveSettings.ownerPhone : "+91 97430 42978";
+  const officePhone = typeof effectiveSettings.officePhone === "string" ? effectiveSettings.officePhone : "+91 82175 85387";
+  const whatsappNumber = typeof effectiveSettings.whatsappNumber === "string" ? effectiveSettings.whatsappNumber.replace(/\D/g, "") : "919743042978";
+  const instagramUrl = typeof effectiveSettings.instagramUrl === "string" ? effectiveSettings.instagramUrl : "https://instagram.com/anugrahaconstruction_";
   const googleReviewUrl = typeof effectiveSettings.googleReviewUrl === "string" ? effectiveSettings.googleReviewUrl : mapsUrl;
   const googleReviewSubtitle = typeof effectiveSettings.googleReviewSubtitle === "string" ? effectiveSettings.googleReviewSubtitle : "Anugraha Constructions, Puttur, APMC Road";
+  // Company overview images removed per request
+  // const overviewImages = ...
+
+  const galleryImages = Array.isArray(effectiveSettings.galleryImages) ? effectiveSettings.galleryImages.filter((image): image is string => typeof image === "string") : [];
+  const faqs = Array.isArray(effectiveSettings.faqs) ? effectiveSettings.faqs.filter((faq): faq is { question: string; answer: string } => Boolean(faq && typeof faq === "object" && typeof (faq as { question?: unknown }).question === "string" && typeof (faq as { answer?: unknown }).answer === "string")) : [];
 
   const categories = ["All", "Residential", "Commercial", "ongoing", "completed"];
 
@@ -340,7 +377,7 @@ export default function HomePage() {
       <header className={scrollTop ? "fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-white/80 backdrop-blur-xl dark:bg-[#071b34]/90" : "fixed inset-x-0 top-0 z-40 bg-transparent"}>
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 lg:px-8">
           <div className="flex items-center gap-3">
-            <img src={logoImage} alt="Anugraha logo" className="h-10 w-10 rounded-full object-cover shadow-glow" />
+            <img src={logoImage} onError={withImageFallback} alt="Anugraha logo" className="h-10 w-10 rounded-full object-cover shadow-glow" />
             <div>
               <div className="text-lg font-semibold tracking-[0.26em]">ANUGRAHA</div>
               <div className="text-xs uppercase tracking-[0.28em] text-slate-500 dark:text-white/60">Constructions</div>
@@ -348,7 +385,7 @@ export default function HomePage() {
           </div>
           <nav className="hidden items-center gap-8 md:flex">
             {navLinks.map((link) => <a key={link.label} href={link.href} className="text-sm font-medium text-slate-600 transition hover:text-primary dark:text-white/70">{link.label}</a>)}
-            <a href="tel:+919743042978" className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow">
+            <a href={`tel:${ownerPhone}`} className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-glow">
               <Phone className="h-4 w-4" /> Call Us
             </a>
           </nav>
@@ -359,7 +396,7 @@ export default function HomePage() {
             <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} className="md:hidden glass border-t border-white/10 px-4 py-4 text-white">
               <div className="flex flex-col gap-3">
                 {navLinks.map((link) => <a key={link.label} href={link.href} onClick={() => setMenuOpen(false)} className="rounded-2xl px-3 py-2 hover:bg-white/10">{link.label}</a>)}
-                <a href="tel:+919743042978" className="rounded-2xl bg-white/10 px-3 py-2">Call Us</a>
+                <a href={`tel:${ownerPhone}`} className="rounded-2xl bg-white/10 px-3 py-2">Call Us</a>
               </div>
             </motion.div>
           ) : null}
@@ -445,21 +482,24 @@ export default function HomePage() {
 
       <main className="overflow-x-hidden relative z-10 -mt-10 rounded-t-[2rem] bg-[#f7faff] pb-0 dark:bg-[#071b34]">
         <section className="mx-auto max-w-7xl px-4 py-20 lg:px-8">
-          <SectionTitle eyebrow={typeof effectiveSettings.overviewBadge === "string" ? effectiveSettings.overviewBadge : "Company Overview"} title={typeof effectiveSettings.overviewTitle === "string" ? effectiveSettings.overviewTitle : "Measured delivery. Elevated living."} subtitle={typeof effectiveSettings.overviewDescription === "string" ? effectiveSettings.overviewDescription : "A concise view of scale, trust, and delivery discipline across premium residential and commercial assets."} />
-          <div className="mt-10 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {statsQuery.isLoading ? Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-36 rounded-[28px]" />) : [
-              { label: "Total Projects", value: typeof effectiveSettings.totalProjects === "number" ? effectiveSettings.totalProjects : statsQuery.data?.totalProjects ?? 0 },
-              { label: "Years Experience", value: typeof effectiveSettings.yearsExperience === "number" ? effectiveSettings.yearsExperience : statsQuery.data?.yearsExperience ?? 0 },
-              { label: "Happy Clients", value: typeof effectiveSettings.happyClients === "number" ? effectiveSettings.happyClients : statsQuery.data?.happyClients ?? 0 },
-              { label: "Team Size", value: typeof effectiveSettings.teamSize === "number" ? effectiveSettings.teamSize : statsQuery.data?.teamSize ?? 0 }
-            ].map((stat) => (
-              <Card key={stat.label} className="rounded-[28px] border border-white/10 bg-white/90 p-6 shadow-[0_8px_40px_rgba(7,27,52,0.08)] dark:bg-white/5">
-                <div className="text-sm uppercase tracking-[0.26em] text-slate-500 dark:text-white/55">{stat.label}</div>
-                <div className="mt-5 text-5xl font-semibold text-[#071b34] dark:text-white"><Counter value={stat.value} /></div>
-              </Card>
-            ))}
+          <div className="grid gap-10 lg:grid-cols-1 lg:items-end">
+            <div>
+
+              <SectionTitle eyebrow={typeof effectiveSettings.overviewBadge === "string" ? effectiveSettings.overviewBadge : "Company Overview"} title={typeof effectiveSettings.overviewTitle === "string" ? effectiveSettings.overviewTitle : "Measured delivery. Elevated living."} subtitle={typeof effectiveSettings.overviewDescription === "string" ? effectiveSettings.overviewDescription : "A concise view of scale, trust, and delivery discipline across premium residential and commercial assets."} />
+              <div className="mt-8 grid grid-cols-2 gap-3">
+                {[
+                  { label: "Projects", value: typeof effectiveSettings.totalProjects === "number" ? effectiveSettings.totalProjects : statsQuery.data?.totalProjects ?? 0 },
+                  { label: "Years", value: typeof effectiveSettings.yearsExperience === "number" ? effectiveSettings.yearsExperience : statsQuery.data?.yearsExperience ?? 0 },
+                  { label: "Clients", value: typeof effectiveSettings.happyClients === "number" ? effectiveSettings.happyClients : statsQuery.data?.happyClients ?? 0 },
+                  { label: "Team", value: typeof effectiveSettings.teamSize === "number" ? effectiveSettings.teamSize : statsQuery.data?.teamSize ?? 0 }
+                ].map((stat) => <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-white/5"><div className="text-3xl font-semibold text-[#071b34] dark:text-white">{statsQuery.isLoading ? "—" : <Counter value={stat.value} />}</div><div className="mt-1 text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{stat.label}</div></div>)}
+              </div>
+            </div>
+            {/* Company overview images removed per request. Keep only projects/years/clients/team stats. */}
+
           </div>
         </section>
+
 
         <section id="projects" className="mx-auto max-w-7xl px-4 py-20 lg:px-8">
           <SectionTitle eyebrow="Project Showcase" title="Featured projects that anchor our reputation." subtitle="A curated set of premium developments across residential and commercial categories, selected to represent the brand on the homepage." />
@@ -477,7 +517,7 @@ export default function HomePage() {
             <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
               {ongoingQuery.isLoading ? Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-[360px] rounded-[28px] bg-white/10" />) : ongoingQuery.data?.map((project) => (
                 <Card key={project.id} className="glass overflow-hidden rounded-[28px] border-white/10 text-white shadow-2xl">
-                  <img src={project.imageUrl} alt={project.title} className="h-56 w-full object-cover" />
+                  <img src={project.imageUrl || imagePlaceholder} onError={withImageFallback} alt={project.title} className="h-56 w-full object-cover" />
                   <CardContent className="space-y-4 p-6">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -501,9 +541,25 @@ export default function HomePage() {
         <section id="services" className="mx-auto max-w-7xl px-4 py-20 lg:px-8">
           <SectionTitle eyebrow="Services" title="A luxury delivery stack under one roof." subtitle="Architecture, construction, interiors, and management services shaped for premium developments." />
           <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {servicesQuery.isLoading ? Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-72 rounded-[28px]" />) : servicesQuery.data?.map((service) => <ServiceCard key={service.id} service={service as any} />)}
+            {servicesQuery.isLoading ? Array.from({ length: 6 }).map((_, index) => <Skeleton key={index} className="h-72 rounded-[28px]" />) : servicesQuery.isError ? <p className="text-rose-600 md:col-span-2 xl:col-span-3">Services could not be loaded. Please try again shortly.</p> : servicesQuery.data?.length ? servicesQuery.data.map((service) => <ServiceCard key={service.id} service={service as any} />) : <p className="text-slate-500 md:col-span-2 xl:col-span-3">No services have been published yet.</p>}
           </div>
         </section>
+
+        <section id="team" className="mx-auto max-w-7xl px-4 py-20 lg:px-8">
+          <SectionTitle eyebrow="Our Team" title="The people behind every successful build." subtitle="Meet the professionals responsible for planning, execution, quality, and client service." />
+          <div className="mt-10 grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {teamQuery.isLoading ? Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-[420px] rounded-[28px]" />) : teamQuery.isError ? <p className="text-rose-600 sm:col-span-2 xl:col-span-3">Team members could not be loaded. Please try again shortly.</p> : teamQuery.data?.length ? teamQuery.data.map((member) => <TeamCard key={member.id} member={member} />) : <p className="text-slate-500 sm:col-span-2 xl:col-span-3">Team profiles will be published soon.</p>}
+          </div>
+        </section>
+
+        {galleryImages.length ? <section id="gallery" className="bg-slate-100 px-4 py-20 dark:bg-white/5">
+          <div className="mx-auto max-w-7xl lg:px-4">
+            <SectionTitle eyebrow="Gallery" title="A closer look at our work." subtitle="Recent construction, detailing, and finished-space highlights managed from the owner dashboard." />
+            <div className="mt-10 grid grid-cols-2 gap-4 md:grid-cols-3">
+              {galleryImages.map((image, index) => <img key={`${image}-${index}`} src={image} onError={withImageFallback} alt={`Anugraha construction gallery ${index + 1}`} loading="lazy" className="h-52 w-full rounded-[24px] object-cover shadow-lg md:h-72" />)}
+            </div>
+          </div>
+        </section> : null}
 
         <section className="bg-[#071b34] px-4 py-20 text-white">
           <div className="mx-auto max-w-7xl lg:px-4">
@@ -516,8 +572,8 @@ export default function HomePage() {
               </a>
             </div>
             <div className="mt-10 overflow-hidden">
-              <div className="marquee-track flex w-max gap-5 pb-2">
-                {testimonialsQuery.isLoading ? Array.from({ length: 5 }).map((_, index) => <Skeleton key={index} className="h-64 w-[360px] rounded-[28px] bg-white/10" />) : [...(testimonialsQuery.data ?? []).filter((testimonial) => testimonial.featured), ...(testimonialsQuery.data ?? []).filter((testimonial) => testimonial.featured)].map((testimonial, index) => <TestimonialCard key={`${testimonial.id}-${index}`} testimonial={testimonial as any} />)}
+              <div className={testimonialsQuery.data && testimonialsQuery.data.length > 1 ? "marquee-track flex w-max gap-5 pb-2" : "flex gap-5 pb-2"}>
+                {testimonialsQuery.isLoading ? Array.from({ length: 3 }).map((_, index) => <Skeleton key={index} className="h-64 w-[360px] rounded-[28px] bg-white/10" />) : testimonialsQuery.isError ? <p className="text-rose-300">Testimonials could not be loaded. Please try again shortly.</p> : testimonialsQuery.data?.length ? [...testimonialsQuery.data, ...(testimonialsQuery.data.length > 1 ? testimonialsQuery.data : [])].map((testimonial, index) => <TestimonialCard key={`${testimonial.id}-${index}`} testimonial={testimonial as any} />) : <div className="rounded-[28px] border border-white/10 bg-white/5 p-8 text-white/65">No testimonials have been published yet.</div>}
               </div>
             </div>
           </div>
@@ -560,6 +616,13 @@ export default function HomePage() {
             </Card>
           </div>
         </section>
+
+        {faqs.length ? <section id="faqs" className="mx-auto max-w-5xl px-4 py-20 lg:px-8">
+          <SectionTitle eyebrow="FAQs" title="Clear answers before construction begins." subtitle="Common questions about our process, delivery, and project engagement." />
+          <div className="mt-10 space-y-3">
+            {faqs.map((faq, index) => <details key={`${faq.question}-${index}`} className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/5"><summary className="cursor-pointer list-none font-semibold text-[#071b34] dark:text-white">{faq.question}<ChevronDown className="float-right h-5 w-5 transition group-open:rotate-180" /></summary><p className="mt-4 leading-7 text-slate-600 dark:text-white/70">{faq.answer}</p></details>)}
+          </div>
+        </section> : null}
       </main>
 
       <footer className="bg-[#071b34] px-4 py-12 text-white">
@@ -577,9 +640,9 @@ export default function HomePage() {
           <div>
             <div className="text-sm font-semibold uppercase tracking-[0.24em] text-white/55">Contact</div>
             <div className="mt-4 grid gap-2 text-sm text-white/75">
-              <a href="tel:+919743042978">+91 97430 42978</a>
-              <a href="tel:+918217585387">+91 82175 85387</a>
-              <a href="https://instagram.com/anugrahaconstruction_">Instagram</a>
+              <a href={`tel:${ownerPhone}`}>{ownerPhone}</a>
+              <a href={`tel:${officePhone}`}>{officePhone}</a>
+              <a href={instagramUrl}>Instagram</a>
             </div>
           </div>
           <div>
@@ -591,7 +654,7 @@ export default function HomePage() {
         <div className="mx-auto mt-8 max-w-7xl border-t border-white/10 pt-6 text-sm text-white/55 lg:px-4">© 2026 Anugraha Constructions. All rights reserved.</div>
       </footer>
 
-      <a href="https://wa.me/919743042978" className="whatsapp-float fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-2xl shadow-emerald-600/30"><MessageCircle className="h-7 w-7" /></a>
+      <a href={`https://wa.me/${whatsappNumber}`} className="whatsapp-float fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-[#25D366] text-white shadow-2xl shadow-emerald-600/30"><MessageCircle className="h-7 w-7" /></a>
     </div>
   );
 }

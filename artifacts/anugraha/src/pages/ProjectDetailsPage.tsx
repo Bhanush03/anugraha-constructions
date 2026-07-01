@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode, type SyntheticEvent } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft, CalendarDays, ChevronRight, CircleCheckBig, Clock3, ExternalLink, MapPin, Phone, Sparkles, Star, Wrench } from "lucide-react";
 import { Link, useLocation } from "wouter";
@@ -7,6 +7,10 @@ import { Button, Card, CardContent, CardTitle, Badge, Skeleton, Separator } from
 import { useFeaturedProjects, useProject, useProjects } from "@anugraha/api-client-react";
 
 const ownerPhone = "919743042978";
+const imagePlaceholder = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='800' height='600'%3E%3Crect width='800' height='600' fill='%23132640'/%3E%3Cpath d='M250 390l95-105 70 75 55-55 90 85H250z' fill='%235b708b'/%3E%3C/svg%3E";
+const usePlaceholder = (event: SyntheticEvent<HTMLImageElement>) => {
+  if (event.currentTarget.src !== imagePlaceholder) event.currentTarget.src = imagePlaceholder;
+};
 
 function formatDate(value?: string | null) {
   if (!value) return "TBD";
@@ -46,7 +50,7 @@ function ProjectTile({
       className="group overflow-hidden rounded-[24px] border border-white/10 bg-white/5 text-left text-white shadow-2xl"
     >
       <div className="relative h-44 overflow-hidden">
-        <img src={imageUrl} alt={title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
+        <img src={imageUrl || imagePlaceholder} onError={usePlaceholder} alt={title} className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#071b34] via-transparent to-transparent" />
         <div className="absolute left-4 top-4 rounded-full bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] backdrop-blur-md">
           {category}
@@ -138,7 +142,7 @@ export default function ProjectDetailsPage() {
     <div className="min-h-screen bg-[#071b34] text-white">
       <section className="relative overflow-hidden border-b border-white/10">
         <div className="absolute inset-0">
-          <img src={activeImage} alt={project.title} className="h-full w-full object-cover opacity-35 blur-[1px]" />
+          <img src={activeImage || imagePlaceholder} onError={usePlaceholder} alt={project.title} className="h-full w-full object-cover opacity-35 blur-[1px]" />
           <div className="absolute inset-0 bg-gradient-to-r from-[#071b34] via-[#071b34]/88 to-[#071b34]/50" />
         </div>
         <div className="relative mx-auto max-w-7xl px-4 py-8 lg:px-8 lg:py-10">
@@ -199,6 +203,7 @@ export default function ProjectDetailsPage() {
                 <motion.img
                   key={activeImage}
                   src={activeImage}
+                  onError={usePlaceholder}
                   alt={project.title}
                   initial={{ opacity: 0, scale: 1.02 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -218,7 +223,7 @@ export default function ProjectDetailsPage() {
                     onClick={() => setActiveImageIndex(index)}
                     className={`group overflow-hidden rounded-[20px] border transition ${index === activeImageIndex ? "border-primary ring-2 ring-primary/40" : "border-white/10 opacity-75 hover:opacity-100"}`}
                   >
-                    <img src={image} alt={`${project.title} gallery ${index + 1}`} className="h-24 w-full object-cover transition duration-700 group-hover:scale-110" />
+                    <img src={image || imagePlaceholder} onError={usePlaceholder} alt={`${project.title} gallery ${index + 1}`} className="h-24 w-full object-cover transition duration-700 group-hover:scale-110" />
                   </button>
                 ))}
               </div>

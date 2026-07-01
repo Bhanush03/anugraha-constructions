@@ -7,8 +7,8 @@ import { configureApiClient } from "@anugraha/api-client-react";
 import App from "./App";
 import "./index.css";
 
-const apiUrl = import.meta.env.VITE_API_URL;
-configureApiClient(apiUrl && !apiUrl.includes(":3000") ? apiUrl : "http://localhost:3001");
+const apiBaseUrl = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:3001" : "https://anugraha-api.onrender.com");
+configureApiClient(apiBaseUrl);
 
 const queryClient = new QueryClient({
   defaultOptions: {

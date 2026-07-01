@@ -26,7 +26,21 @@ npm install
 ```
 
 ## Development
-Run frontend and API server in separate terminals.
+Run the API, website, and standalone admin together from the repository root:
+
+```bash
+pnpm dev
+```
+
+For local development, the API automatically uses a persistent embedded PGlite
+database in `.data/` when `DATABASE_URL` is not set. It also creates the required
+tables and the initial admin account automatically.
+
+Default local URLs:
+
+- Website: `http://localhost:5173`
+- Admin: `http://localhost:5174`
+- API: `http://localhost:3001`
 
 Frontend
 
@@ -68,7 +82,9 @@ Create a `.env` file (do NOT commit it). Example variables used by the API:
 Check `.env.example` files in the repo for more fields.
 
 ## Database
-The API uses PostgreSQL via Drizzle ORM and `postgres`. Configure `DATABASE_URL` for a local Postgres instance or a Supabase connection string.
+Production uses PostgreSQL via Drizzle ORM. Configure `DATABASE_URL` with a
+PostgreSQL or Supabase connection string. Local development needs no external
+database.
 
 If you want a fresh seeded database (development only):
 
@@ -77,7 +93,9 @@ pnpm db:reset
 ```
 
 ## Auth / Admin
-- The seed script creates an admin user if the users table is empty. Seed values come from `ADMIN_USERNAME` and `ADMIN_PASSWORD` or default to `admin` / `changeme123`.
+- API startup creates an admin user if the users table is empty. Credentials come
+  from `ADMIN_USERNAME` and `ADMIN_PASSWORD`, defaulting locally to
+  `admin` / `changeme123`. Set strong production values.
 - Use `POST /api/auth/login` with JSON `{ "username": "...", "password": "..." }` to get a JWT.
 
 ## Recommended .gitignore

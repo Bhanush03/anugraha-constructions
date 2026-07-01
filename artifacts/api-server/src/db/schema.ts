@@ -58,6 +58,7 @@ export const team = pgTable("team", {
 	role: text("role").notNull(),
 	bio: text("bio").notNull(),
 	avatarUrl: text("avatar_url"),
+	socialLinks: text("social_links").notNull().default("{}"),
 	order: integer("order").notNull().default(0),
 	createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
@@ -81,5 +82,6 @@ export const siteSettings = pgTable("site_settings", {
 	teamSize: integer("team_size").notNull().default(0),
 	heroImage: text("hero_image"),
 	logoImage: text("logo_image"),
+	content: text("content").notNull().default("{}"),
 	updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });

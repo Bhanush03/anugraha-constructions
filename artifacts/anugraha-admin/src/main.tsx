@@ -7,7 +7,7 @@ import { configureApiClient } from "@anugraha/api-client-react";
 import App from "./App";
 import "./index.css";
 
-const apiBaseUrl = import.meta.env.VITE_API_URL ?? "https://anugraha-api.onrender.com";
+const apiBaseUrl = import.meta.env.VITE_API_URL ?? (import.meta.env.DEV ? "http://localhost:3001" : "https://anugraha-api.onrender.com");
 
 configureApiClient(apiBaseUrl);
 

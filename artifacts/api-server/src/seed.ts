@@ -269,36 +269,22 @@ async function createTables() {
 async function maybeSeedTable() {
   if (!db) return;
   const [{ count: projectCount }] = await db.select({ count: count() }).from(projects);
-  if (Number(projectCount) === 0) {
-    await db.insert(projects).values(projectSeed.map((project) => ({ ...project, images: JSON.stringify(project.images), features: JSON.stringify(project.features ?? []), amenities: JSON.stringify(project.amenities ?? []), featured: Boolean(project.featured) })));
-  } else {
-    for (const project of projectSeed) {
-      await db.update(projects).set({
-        slug: project.slug,
-        images: JSON.stringify(project.images),
-        features: JSON.stringify(project.features ?? []),
-        amenities: JSON.stringify(project.amenities ?? [])
-      }).where(eq(projects.title, project.title));
-    }
-  }
-
   const [{ count: serviceCount }] = await db.select({ count: count() }).from(services);
-  if (Number(serviceCount) === 0) {
-    await db.insert(services).values(serviceSeed.map((service) => ({ ...service, features: JSON.stringify(service.features) })));
-  }
-
   const [{ count: testimonialCount }] = await db.select({ count: count() }).from(testimonials);
-  if (Number(testimonialCount) === 0) {
-    await db.insert(testimonials).values(testimonialSeed.map((testimonial) => ({ ...testimonial, featured: Boolean(testimonial.featured) })));
-  }
-
   const [{ count: teamCount }] = await db.select({ count: count() }).from(team);
-  if (Number(teamCount) === 0) {
-    await db.insert(team).values(teamSeed.map((member) => ({ ...member })));
-  }
-
   const [{ count: callbackCount }] = await db.select({ count: count() }).from(callbacks);
-  if (Number(callbackCount) === 0) {
+  const isNewContentDatabase =
+    Number(projectCount) +
+    Number(serviceCount) +
+    Number(testimonialCount) +
+    Number(teamCount) +
+    Number(callbackCount) === 0;
+
+  if (isNewContentDatabase) {
+    await db.insert(projects).values(projectSeed.map((project) => ({ ...project, images: JSON.stringify(project.images), features: JSON.stringify(project.features ?? []), amenities: JSON.stringify(project.amenities ?? []), featured: Boolean(project.featured) })));
+    await db.insert(services).values(serviceSeed.map((service) => ({ ...service, features: JSON.stringify(service.features) })));
+    await db.insert(testimonials).values(testimonialSeed.map((testimonial) => ({ ...testimonial, featured: Boolean(testimonial.featured) })));
+    await db.insert(team).values(teamSeed.map((member) => ({ ...member })));
     await db.insert(callbacks).values(callbackSeed.map((callback) => ({ ...callback })));
   }
 
@@ -306,7 +292,26 @@ async function maybeSeedTable() {
   try {
     const [{ count: settingsCount }] = await db.select({ count: count() }).from(siteSettings as any);
     if (Number(settingsCount) === 0) {
-      await db.insert(siteSettings as any).values({ overviewBadge: "Since 2010", overviewTitle: "Measured delivery. Elevated living.", overviewDescription: "A concise view of scale, trust, and delivery discipline across premium residential and commercial assets.", totalProjects: 0, yearsExperience: 9, happyClients: 40, teamSize: 12 });
+      await db.insert(siteSettings as any).values({
+        overviewBadge: "Since 2010",
+        overviewTitle: "Measured delivery. Elevated living.",
+        overviewDescription: "A concise view of scale, trust, and delivery discipline across premium residential and commercial assets.",
+        totalProjects: projectSeed.length,
+        yearsExperience: 15,
+        happyClients: 40,
+        teamSize: teamSeed.length,
+        heroImage: "/images/hero-bg.jpeg",
+        logoImage: "/images/logo-small.png",
+        content: JSON.stringify({
+          heroHeadline: "WE CONVERT DREAMS INTO REALITY",
+          heroSubtitle: "Premium Construction Solutions Powered By Smart Technology",
+          officeName: "Shivakripa building",
+          officeAddress: "APMC ROAD, near City hospital, Puttur, Karnataka 574201",
+          ownerPhone: "+91 97430 42978",
+          officePhone: "+91 82175 85387",
+          whatsappNumber: "919743042978"
+        })
+      });
     }
   } catch (e) {
     // surface errors for inspection rather than silently swallowing

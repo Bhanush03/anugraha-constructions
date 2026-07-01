@@ -2,6 +2,7 @@
 import cors from "cors";
 import express from "express";
 import pino from "pino";
+import rateLimit from "express-rate-limit";
 import { and, asc, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -10,14 +11,17 @@ import crypto from "crypto";
 import { env } from "./env.js";
 import { requireAuth, requireAdmin, signToken } from "./middleware/auth.js";
 import { db, persistDatabase } from "./db.js";
-import { normalizeProjectImage, saveDataUrlImage } from "./storage/supabase.js";
+import { deleteStoredImage, normalizeProjectImage, saveDataUrlImage } from "./storage/supabase.js";
 import { serializeCallback, serializeProject, serializeService, serializeTeamMember, serializeTestimonial } from "./serializers.js";
+import { seedDatabase } from "./seed.js";
 
 const app = express();
 app.use(cors());
 // Increase JSON body size to allow data URL image uploads from admin UI
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "60mb" }));
 const logger = pino();
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false });
+const callbackLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false });
 
 app.use((_req, res, next) => {
   res.setHeader("Cache-Control", "no-store");
@@ -59,12 +63,13 @@ const serviceInputSchema = z.object({
   features: z.array(z.string()).default([]),
   order: z.number().int().default(0)
 });
+const uploadedImageSchema = z.string().url().or(z.string().regex(/^data:image\/(?:jpeg|png|webp);base64,/));
 const testimonialInputSchema = z.object({
   clientName: z.string().min(1),
   clientTitle: z.string().min(1),
   message: z.string().min(1),
   rating: z.number().int().min(1).max(5),
-  avatarUrl: z.string().url().nullable().optional(),
+  avatarUrl: uploadedImageSchema.nullable().optional(),
   featured: z.boolean().optional().default(false)
 });
 const callbackInputSchema = z.object({
@@ -77,7 +82,8 @@ const teamInputSchema = z.object({
   name: z.string().min(1),
   role: z.string().min(1),
   bio: z.string().min(1),
-  avatarUrl: z.string().url().nullable().optional(),
+  avatarUrl: uploadedImageSchema.nullable().optional(),
+  socialLinks: z.record(z.string().url()).optional().default({}),
   order: z.number().int().default(0)
 });
 
@@ -110,45 +116,30 @@ app.get("/api/healthz", (_req, res) => {
 });
 
 // Auth
-app.post('/api/auth/login', async (req, res) => {
-  console.info("/api/auth/login request body", req.body);
+app.post('/api/auth/login', loginLimiter, async (req, res) => {
   const { username, password } = req.body || {};
-  console.info("/api/auth/login username received", { username });
-  console.info("/api/auth/login env flags", {
-    hasADMIN_USERNAME: Boolean(env.ADMIN_USERNAME),
-    hasADMIN_PASSWORD: Boolean(env.ADMIN_PASSWORD),
-    hasJWT_SECRET: Boolean(env.JWT_SECRET)
-  });
   if (!username || !password) {
     console.error("/api/auth/login missing credentials", { usernamePresent: Boolean(username), passwordPresent: Boolean(password) });
     return res.status(400).json({ error: 'missing_credentials' });
   }
   try {
     const [user] = await db.select().from(users).where(eq(users.username, username));
-    console.info("/api/auth/login user lookup complete", { username, userFound: Boolean(user) });
     if (!user) {
-      console.error("/api/auth/login invalid credentials: user not found", { username });
       return res.status(401).json({ error: 'invalid_credentials' });
     }
     const stored = (user as any).passwordHash || (user as any).password_hash || '';
     let ok = false;
     if (stored.includes(':')) {
       const [hash, salt] = stored.split(':');
-      console.info("/api/auth/login stored password uses PBKDF2", { saltPresent: Boolean(salt) });
       const derived = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex');
-      console.info("/api/auth/login derived hash computed", { derivedLength: derived.length });
       ok = derived === hash;
     } else {
       ok = password === stored;
     }
-    console.info("/api/auth/login password verification result", { username, ok });
     if (!ok) {
-      console.error("/api/auth/login invalid credentials: password mismatch", { username });
       return res.status(401).json({ error: 'invalid_credentials' });
     }
     const token = signToken({ username: user.username, role: user.role });
-    console.info("/api/auth/login token generated", { username });
-    console.info("/api/auth/login success", { username: user.username, role: user.role });
     return res.json({ token });
   } catch (error) {
     console.error("LOGIN ERROR:", error);
@@ -166,8 +157,21 @@ function slugify(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+function parseSiteContent(value: string | null | undefined) {
+  let content: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(value || "{}");
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) content = parsed;
+  } catch {
+    content = {};
+  }
+  return content;
+}
+
 function mapSiteSettings(row: typeof siteSettings.$inferSelect) {
+  const content = parseSiteContent(row.content);
   return {
+    ...content,
     overviewBadge: row.overviewBadge,
     overviewTitle: row.overviewTitle,
     overviewDescription: row.overviewDescription,
@@ -195,7 +199,24 @@ const siteSettingsInputSchema = z.object({
   happyClients: z.number().int().optional(),
   teamSize: z.number().int().optional(),
   heroImage: z.string().optional().nullable(),
-  logoImage: z.string().optional().nullable()
+  logoImage: z.string().optional().nullable(),
+  heroHeadline: z.string().optional(),
+  heroSubtitle: z.string().optional(),
+  completedProjects: z.number().int().min(0).optional(),
+  ongoingProjects: z.number().int().min(0).optional(),
+  pendingCallbacks: z.number().int().min(0).optional(),
+  officeName: z.string().optional(),
+  officeAddress: z.string().optional(),
+  ownerPhone: z.string().optional(),
+  officePhone: z.string().optional(),
+  whatsappNumber: z.string().optional(),
+  instagramUrl: z.string().url().optional(),
+  mapsUrl: z.string().url().optional(),
+  googleReviewUrl: z.string().url().optional(),
+  googleReviewSubtitle: z.string().optional(),
+  overviewImages: z.array(uploadedImageSchema).max(8).optional(),
+  galleryImages: z.array(uploadedImageSchema).max(24).optional(),
+  faqs: z.array(z.object({ question: z.string().min(1), answer: z.string().min(1) })).max(30).optional()
 });
 
 app.get("/api/settings", async (_req, res) => {
@@ -222,8 +243,24 @@ app.put("/api/settings", requireAuth, requireAdmin, async (req, res) => {
       const saved = await saveDataUrlImage(payload.logoImage, "settings/logo-small");
       if (saved) (payload as any).logoImage = saved;
     }
+    if (Array.isArray(payload.galleryImages)) {
+      payload.galleryImages = await Promise.all(payload.galleryImages.map(async (image, index) => {
+        if (!image.startsWith("data:")) return image;
+        return (await saveDataUrlImage(image, `gallery/image-${Date.now()}-${index + 1}`)) ?? image;
+      }));
+    }
+    if (Array.isArray(payload.overviewImages)) {
+      payload.overviewImages = await Promise.all(payload.overviewImages.map(async (image, index) => {
+        if (!image.startsWith("data:")) return image;
+        return (await saveDataUrlImage(image, `overview/image-${Date.now()}-${index + 1}`)) ?? image;
+      }));
+    }
 
     const existing = await getLatestSiteSettingsRow();
+    const {
+      overviewBadge, overviewTitle, overviewDescription, totalProjects, yearsExperience,
+      happyClients, teamSize, heroImage, logoImage, ...content
+    } = payload;
     if (existing) {
       await db.update(siteSettings as any).set({
         overviewBadge: (payload as any).overviewBadge ?? existing.overviewBadge,
@@ -235,8 +272,25 @@ app.put("/api/settings", requireAuth, requireAdmin, async (req, res) => {
         teamSize: (payload as any).teamSize ?? existing.teamSize,
         heroImage: (payload as any).heroImage ?? existing.heroImage,
         logoImage: (payload as any).logoImage ?? existing.logoImage,
+        content: JSON.stringify({ ...parseSiteContent(existing.content), ...content }),
         updatedAt: sql`CURRENT_TIMESTAMP`
       }).where(eq((siteSettings as any).id, (existing as any).id));
+      if (payload.heroImage && payload.heroImage !== existing.heroImage) await deleteStoredImage(existing.heroImage);
+      if (payload.logoImage && payload.logoImage !== existing.logoImage) await deleteStoredImage(existing.logoImage);
+      const previousGallery = parseSiteContent(existing.content).galleryImages;
+      if (Array.isArray(previousGallery) && Array.isArray(content.galleryImages)) {
+        const retained = new Set(content.galleryImages.filter((image): image is string => typeof image === "string"));
+        for (const image of previousGallery) {
+          if (typeof image === "string" && !retained.has(image)) await deleteStoredImage(image);
+        }
+      }
+      const previousOverview = parseSiteContent(existing.content).overviewImages;
+      if (Array.isArray(previousOverview) && Array.isArray(content.overviewImages)) {
+        const retained = new Set(content.overviewImages.filter((image): image is string => typeof image === "string"));
+        for (const image of previousOverview) {
+          if (typeof image === "string" && !retained.has(image)) await deleteStoredImage(image);
+        }
+      }
     } else {
       await db.insert(siteSettings as any).values({
         overviewBadge: (payload as any).overviewBadge ?? null,
@@ -248,6 +302,7 @@ app.put("/api/settings", requireAuth, requireAdmin, async (req, res) => {
         teamSize: (payload as any).teamSize ?? 0,
         heroImage: (payload as any).heroImage ?? null,
         logoImage: (payload as any).logoImage ?? null
+        ,content: JSON.stringify(content)
       });
     }
 
@@ -280,7 +335,7 @@ app.get("/api/stats", async (_req, res) => {
   });
 });
 
-app.get("/api/stats/dashboard", async (_req, res) => {
+app.get("/api/stats/dashboard", requireAuth, requireAdmin, async (_req, res) => {
   if (!db) {
     return res.json({ totalProjects: 0, ongoingProjects: 0, completedProjects: 0, pendingCallbacks: 0, totalCallbacks: 0, recentCallbacks: [], projectsByCategory: [], recentProjects: [] });
   }
@@ -385,6 +440,8 @@ app.patch("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   try {
     const payload = projectInputSchema.partial().parse(req.body);
+    const [existing] = await db.select().from(projects).where(eq(projects.id, id));
+    if (!existing) return res.status(404).json(notFound("Project not found"));
     const galleryImages = payload.galleryImages ?? payload.images;
     const { images, features, amenities, galleryImages: _galleryImages, ...basePayload } = payload;
     const uploadedGalleryImages = Array.isArray(galleryImages)
@@ -400,6 +457,15 @@ app.patch("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
       ...(typeof payload.featured === "boolean" ? { featured: payload.featured } : {})
     };
     await db.update(projects).set(nextPayload).where(eq(projects.id, id));
+    if (typeof payload.imageUrl === "string" && payload.imageUrl.startsWith("data:")) {
+      await deleteStoredImage(existing.imageUrl);
+    }
+    if (uploadedGalleryImages) {
+      const retained = new Set(uploadedGalleryImages.filter((image): image is string => Boolean(image)));
+      for (const oldImage of serializeProject(existing).galleryImages) {
+        if (!retained.has(oldImage)) await deleteStoredImage(oldImage);
+      }
+    }
     const [updated] = await db.select().from(projects).where(eq(projects.id, id));
     if (!updated) return res.status(404).json(notFound("Project not found"));
     // persistDatabase();
@@ -412,8 +478,11 @@ app.patch("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
 
 app.delete("/api/projects/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
+  const [existing] = await db.select().from(projects).where(eq(projects.id, id));
+  if (!existing) return res.status(404).json(notFound("Project not found"));
   await db.delete(projects).where(eq(projects.id, id));
-  // persistDatabase();
+  await deleteStoredImage(existing.imageUrl);
+  for (const image of serializeProject(existing).galleryImages) await deleteStoredImage(image);
   res.status(204).end();
 });
 
@@ -423,28 +492,28 @@ app.get("/api/services", async (_req, res) => {
 });
 
 app.post("/api/services", requireAuth, requireAdmin, async (req, res) => {
-  console.log("POST /api/services body size:", req.headers["content-length"], "content-type:", req.headers["content-type"]);
-  console.log("POST /api/services body preview:", String(req.body).slice(0, 400));
   const payload = serviceInputSchema.parse(req.body);
   if (typeof payload.icon === "string" && payload.icon.startsWith("data:")) {
     const saved = await saveDataUrlImage(payload.icon, `services/service-${Date.now()}`);
     if (saved) payload.icon = saved;
   }
-  await db.insert(services).values({ ...payload, features: JSON.stringify(payload.features) });
-  // const [inserted] = await db.select().from(services).orderBy(desc(services.id)).limit(1);
-  // persistDatabase();
- return res.status(201).json({
-  success: true,
-  message: "Service created successfully"
-});
+  const [inserted] = await db.insert(services).values({ ...payload, features: JSON.stringify(payload.features) }).returning();
+  return res.status(201).json(mapService(inserted));
 });
 
 app.patch("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   const payload = serviceInputSchema.partial().parse(req.body);
+  const [existing] = await db.select().from(services).where(eq(services.id, id));
+  if (!existing) return res.status(404).json(notFound("Service not found"));
   if (typeof payload.icon === "string" && payload.icon.startsWith("data:")) {
     const saved = await saveDataUrlImage(payload.icon, `services/service-${id}`);
-    if (saved) payload.icon = saved;
+    if (saved) {
+      payload.icon = saved;
+      await deleteStoredImage(existing.icon);
+    }
+  } else if (typeof payload.icon === "string" && payload.icon !== existing.icon) {
+    await deleteStoredImage(existing.icon);
   }
   const { features, ...basePayload } = payload;
   const nextServicePayload = {
@@ -460,8 +529,10 @@ app.patch("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
 
 app.delete("/api/services/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
+  const [existing] = await db.select().from(services).where(eq(services.id, id));
+  if (!existing) return res.status(404).json(notFound("Service not found"));
   await db.delete(services).where(eq(services.id, id));
-  // persistDatabase();
+  await deleteStoredImage(existing.icon);
   res.status(204).end();
 });
 
@@ -476,19 +547,24 @@ app.post("/api/testimonials", requireAuth, requireAdmin, async (req, res) => {
     const saved = await saveDataUrlImage(payload.avatarUrl, `testimonials/testimonial-${Date.now()}`);
     if (saved) payload.avatarUrl = saved;
   }
-  await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) });
-  // const [inserted] = await db.select().from(testimonials).orderBy(desc(testimonials.id)).limit(1);
-  // persistDatabase();
-  // res.status(201).json(mapTestimonial(inserted));
-    return res.status(201).json({
-    success: true,
-    message: "Testimonial created successfully"
-  });
+  const [inserted] = await db.insert(testimonials).values({ ...payload, featured: Boolean(payload.featured) }).returning();
+  return res.status(201).json(mapTestimonial(inserted));
 });
 
 app.patch("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   const payload = testimonialInputSchema.partial().parse(req.body);
+  const [existing] = await db.select().from(testimonials).where(eq(testimonials.id, id));
+  if (!existing) return res.status(404).json(notFound("Testimonial not found"));
+  if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
+    const saved = await saveDataUrlImage(payload.avatarUrl, `testimonials/testimonial-${id}`);
+    if (saved) {
+      payload.avatarUrl = saved;
+      await deleteStoredImage(existing.avatarUrl);
+    }
+  } else if (payload.avatarUrl === null) {
+    await deleteStoredImage(existing.avatarUrl);
+  }
   await db.update(testimonials).set({ ...payload, ...(typeof payload.featured === "boolean" ? { featured: payload.featured } : {}) }).where(eq(testimonials.id, id));
   const [updated] = await db.select().from(testimonials).where(eq(testimonials.id, id));
   if (!updated) return res.status(404).json(notFound("Testimonial not found"));
@@ -498,12 +574,14 @@ app.patch("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) =
 
 app.delete("/api/testimonials/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
+  const [existing] = await db.select().from(testimonials).where(eq(testimonials.id, id));
+  if (!existing) return res.status(404).json(notFound("Testimonial not found"));
   await db.delete(testimonials).where(eq(testimonials.id, id));
-  // persistDatabase();
+  await deleteStoredImage(existing.avatarUrl);
   res.status(204).end();
 });
 
-app.get("/api/callbacks", async (_req, res) => {
+app.get("/api/callbacks", requireAuth, requireAdmin, async (_req, res) => {
   const list = await db.select().from(callbacks).orderBy(desc(callbacks.createdAt));
   res.json(list.map(mapCallback));
 });
@@ -557,7 +635,7 @@ app.post("/api/callbacks", requireAuth, requireAdmin, async (req, res) => {
 
 // Public callback endpoint: accepts unauthenticated submissions from the public
 // and triggers the same WhatsApp notification flow as the admin route.
-app.post("/api/public/callbacks", async (req, res) => {
+app.post("/api/public/callbacks", callbackLimiter, async (req, res) => {
   try {
     const payload = callbackInputSchema.parse(req.body);
     await db.insert(callbacks).values({
@@ -575,7 +653,6 @@ app.post("/api/public/callbacks", async (req, res) => {
       const owner = env.WHATSAPP_OWNER_NUMBER;
       const apiUrl = env.WHATSAPP_API_URL;
       const token = env.WHATSAPP_API_TOKEN;
-      console.log("Before WhatsApp");
       if (enabledInSettings && owner && apiUrl) {
         const text = `New callback request:\nName: ${payload.name}\nPhone: ${payload.phone}\nEmail: ${payload.email || "N/A"}\nMessage: ${payload.message || "N/A"}`;
         try {
@@ -599,7 +676,6 @@ app.post("/api/public/callbacks", async (req, res) => {
     } catch (notifyErr) {
       logger.error({ err: String(notifyErr) }, "whatsapp_notify_error_public");
     }
-    console.log("After WhatsApp");
     res.status(201).json({
   success: true,
   message: "Saved successfully"
@@ -639,16 +715,29 @@ app.post("/api/team", requireAuth, requireAdmin, async (req, res) => {
     const saved = await saveDataUrlImage(payload.avatarUrl, `team/team-${Date.now()}`);
     if (saved) payload.avatarUrl = saved;
   }
-  await db.insert(team).values(payload);
-  const [inserted] = await db.select().from(team).orderBy(desc(team.id)).limit(1);
-  // persistDatabase();
+  const [inserted] = await db.insert(team).values({ ...payload, socialLinks: JSON.stringify(payload.socialLinks) }).returning();
   res.status(201).json(mapTeamMember(inserted));
 });
 
 app.patch("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
   const payload = teamInputSchema.partial().parse(req.body);
-  await db.update(team).set(payload).where(eq(team.id, id));
+  const [existing] = await db.select().from(team).where(eq(team.id, id));
+  if (!existing) return res.status(404).json(notFound("Team member not found"));
+  if (typeof payload.avatarUrl === "string" && payload.avatarUrl.startsWith("data:")) {
+    const saved = await saveDataUrlImage(payload.avatarUrl, `team/team-${id}`);
+    if (saved) {
+      payload.avatarUrl = saved;
+      await deleteStoredImage(existing.avatarUrl);
+    }
+  } else if (payload.avatarUrl === null) {
+    await deleteStoredImage(existing.avatarUrl);
+  }
+  const { socialLinks, ...basePayload } = payload;
+  await db.update(team).set({
+    ...basePayload,
+    ...(socialLinks !== undefined ? { socialLinks: JSON.stringify(socialLinks) } : {})
+  }).where(eq(team.id, id));
   const [updated] = await db.select().from(team).where(eq(team.id, id));
   if (!updated) return res.status(404).json(notFound("Team member not found"));
   // persistDatabase();
@@ -657,8 +746,10 @@ app.patch("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
 
 app.delete("/api/team/:id", requireAuth, requireAdmin, async (req, res) => {
   const { id } = idSchema.parse(req.params);
+  const [existing] = await db.select().from(team).where(eq(team.id, id));
+  if (!existing) return res.status(404).json(notFound("Team member not found"));
   await db.delete(team).where(eq(team.id, id));
-  // persistDatabase();
+  await deleteStoredImage(existing.avatarUrl);
   res.status(204).end();
 });
 
@@ -703,11 +794,62 @@ async function ensureInitialAdminUser() {
   }
 }
 
-async function main() {
-  logger.info({ databaseUrl: env.DATABASE_URL, jwtSecretPresent: Boolean(env.JWT_SECRET) }, "startup: env");
-  logger.info("startup: automatic database seeding disabled");
+async function ensureDatabaseSchema() {
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS projects (
+    id serial PRIMARY KEY, slug text NOT NULL DEFAULT '', title text NOT NULL,
+    description text NOT NULL, status text NOT NULL DEFAULT 'ongoing',
+    category text NOT NULL, progress integer NOT NULL DEFAULT 0,
+    location text NOT NULL, value text NOT NULL, start_date text NOT NULL,
+    end_date text, image_url text NOT NULL, images text NOT NULL DEFAULT '[]',
+    features text NOT NULL DEFAULT '[]', amenities text NOT NULL DEFAULT '[]',
+    featured boolean NOT NULL DEFAULT false, phase text,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS services (
+    id serial PRIMARY KEY, title text NOT NULL, description text NOT NULL,
+    icon text NOT NULL, features text NOT NULL DEFAULT '[]',
+    "order" integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS testimonials (
+    id serial PRIMARY KEY, client_name text NOT NULL, client_title text NOT NULL,
+    message text NOT NULL, rating integer NOT NULL DEFAULT 5, avatar_url text,
+    featured boolean NOT NULL DEFAULT false,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS callbacks (
+    id serial PRIMARY KEY, name text NOT NULL, phone text NOT NULL, email text,
+    message text, status text NOT NULL DEFAULT 'pending',
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS team (
+    id serial PRIMARY KEY, name text NOT NULL, role text NOT NULL, bio text NOT NULL,
+    avatar_url text, social_links text NOT NULL DEFAULT '{}',
+    "order" integer NOT NULL DEFAULT 0,
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS users (
+    id serial PRIMARY KEY, username text NOT NULL UNIQUE, password_hash text NOT NULL,
+    role text NOT NULL DEFAULT 'admin',
+    created_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS site_settings (
+    id serial PRIMARY KEY, overview_badge text, overview_title text,
+    overview_description text, total_projects integer NOT NULL DEFAULT 0,
+    years_experience integer NOT NULL DEFAULT 0, happy_clients integer NOT NULL DEFAULT 0,
+    team_size integer NOT NULL DEFAULT 0, hero_image text, logo_image text,
+    content text NOT NULL DEFAULT '{}',
+    updated_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`);
+}
 
-  // await ensureInitialAdminUser();
+async function main() {
+  logger.info({ databaseConfigured: Boolean(env.DATABASE_URL), jwtSecretPresent: Boolean(env.JWT_SECRET) }, "startup: env");
+
+  await ensureDatabaseSchema();
+  await db.execute(sql`ALTER TABLE team ADD COLUMN IF NOT EXISTS social_links text NOT NULL DEFAULT '{}'`);
+  await db.execute(sql`ALTER TABLE site_settings ADD COLUMN IF NOT EXISTS content text NOT NULL DEFAULT '{}'`);
+  await seedDatabase();
 
   // persistDatabase();
   const port = Number(process.env.PORT ?? 3001);

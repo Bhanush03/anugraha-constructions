@@ -12,17 +12,18 @@
     "test:db": "tsx src/test-db.ts"
   },
   "dependencies": {
-    "cors": "^2.8.5",
+    "@electric-sql/pglite": "^0.5.3",
     "@supabase/supabase-js": "^2.50.2",
-    "drizzle-orm": "^0.44.0",
     "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
     "dotenv": "^16.3.1",
-    "postgres": "^3.4.9",
+    "drizzle-orm": "^0.44.0",
+    "express": "^5.0.0",
     "express-rate-limit": "^6.8.0",
     "jsonwebtoken": "^9.0.2",
-    "express": "^5.0.0",
     "pino": "^9.4.0",
     "pino-http": "^10.3.0",
+    "postgres": "^3.4.9",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -30,6 +31,6 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.7",
     "tsx": "^4.19.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }

@@ -60,6 +60,7 @@ import {
   useDeleteTestimonial,
   useProjects,
   useServices,
+  useSiteSettings,
   useTeam,
   useTestimonials,
   useUpdateCallback,
@@ -71,7 +72,25 @@ import {
 } from "@anugraha/api-client-react";
 import { clearAdminAuthed } from "@/lib/auth";
 
+type ApiErrorLike = { error?: string; message?: string; issues?: unknown };
+function getApiErrorMessage(err: unknown): string {
+  if (!err) return "Unknown error";
+  if (typeof err === "string") return err;
+  const maybe = err as any;
+  if (maybe?.message) return String(maybe.message);
+  if (maybe?.error || maybe?.issues) return [maybe.error, maybe.message].filter(Boolean).join(" - ");
+  return err instanceof Error ? err.message : JSON.stringify(err);
+}
+function formatApiErrorPayload(payload: ApiErrorLike): string {
+  const parts: string[] = [];
+  if (payload.error) parts.push(String(payload.error));
+  if (payload.message) parts.push(String(payload.message));
+  if (payload.issues) parts.push(`issues: ${JSON.stringify(payload.issues)}`);
+  return parts.join(" | ") || "Request failed";
+}
+
 const adminNav = [
+
   { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { label: "Projects", href: "/projects", icon: Building2 },
   { label: "Callbacks", href: "/callbacks", icon: PhoneCall },
@@ -82,6 +101,17 @@ const adminNav = [
 ];
 
 const serviceIcons = ["Home", "Building2", "BriefcaseBusiness", "ClipboardList", "Sparkles", "ShieldCheck", "Wrench"] as const;
+
+function readAdminImage(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) return reject(new Error("Choose a JPG, PNG, or WEBP image."));
+    if (file.size > 5 * 1024 * 1024) return reject(new Error("Image must be 5 MB or smaller."));
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Failed to read image file."));
+    reader.readAsDataURL(file);
+  });
+}
 
 type ProjectRecord = {
   id: number;
@@ -420,7 +450,6 @@ function DashboardPage() {
       alert("Saved to server and updated overrides.");
       setEditOpen(false);
     } catch (err) {
-      console.warn(err);
       alert("Failed to save to server. Is the API reachable?");
     }
   };
@@ -472,13 +501,6 @@ function ProjectsPage() {
   const [tagsText, setTagsText] = useState("");
   const [form, setForm] = useState({ title: "", description: "", status: "ongoing", category: "Residential", progress: 0, location: "", value: "", startDate: "", endDate: "", imageUrl: "", featured: false, phase: "", images: "" });
 
-  const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(new Error("Failed to read image file"));
-    reader.readAsDataURL(file);
-  });
-
   const openEditor = (project?: any) => {
     if (project) {
       setEditingId(project.id);
@@ -529,7 +551,15 @@ function ProjectsPage() {
       }
       setOpen(false);
     } catch (err) {
-      alert("Failed to save project: " + (err instanceof Error ? err.message : String(err)));
+      let message = "Failed to save project";
+      try {
+        const payload = err as any;
+        const formatted = formatApiErrorPayload(payload);
+        message = formatted ? `${message}: ${formatted}` : message;
+      } catch {
+        // ignore
+      }
+      alert(message);
     }
   };
 
@@ -548,11 +578,10 @@ function ProjectsPage() {
             <div className="grid gap-4 md:grid-cols-2"><Input type="date" value={form.endDate} onChange={(event) => setForm((current) => ({ ...current, endDate: event.target.value }))} /><div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/60">Project image is upload-only</div></div>
             <div className="grid gap-2">
               <label className="text-sm text-white/70">Upload project image</label>
-              <input type="file" accept="image/*" onChange={async (event) => {
+              <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => {
                 const file = event.target.files?.[0];
                 if (!file) return;
-                const dataUrl = await readFileAsDataUrl(file);
-                setForm((current) => ({ ...current, imageUrl: dataUrl }));
+                try { const dataUrl = await readAdminImage(file); setForm((current) => ({ ...current, imageUrl: dataUrl })); } catch (error) { alert(error instanceof Error ? error.message : "Unable to read image."); event.target.value = ""; }
               }} />
             </div>
             {form.imageUrl ? <img src={form.imageUrl} alt="preview" className="h-48 w-full rounded-[24px] object-cover" /> : null}
@@ -562,7 +591,20 @@ function ProjectsPage() {
               <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">{form.progress}%</div>
             </div>
             <Textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
-            <Textarea value={tagsText} onChange={(event) => setTagsText(event.target.value)} placeholder="Images, one URL per line" />
+            <div className="grid gap-2">
+              <label className="text-sm text-white/70">Project gallery images</label>
+              <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => {
+                const files = Array.from(event.target.files ?? []);
+                try {
+                  const images = await Promise.all(files.map(readAdminImage));
+                  setTagsText((current) => [current, ...images].filter(Boolean).join("\n"));
+                } catch (error) {
+                  alert(error instanceof Error ? error.message : "Unable to read gallery images.");
+                }
+                event.target.value = "";
+              }} />
+              <Textarea value={tagsText} onChange={(event) => setTagsText(event.target.value)} placeholder="Uploaded images or one image URL per line" />
+            </div>
             <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.featured} onChange={(event) => setForm((current) => ({ ...current, featured: event.target.checked }))} /> Show as featured project on homepage</label>
           </div>
           <div className="sticky bottom-0 z-50 bg-gradient-to-t from-transparent to-white/5 dark:to-[#071b34] px-4 py-3 flex items-center gap-3">
@@ -610,22 +652,23 @@ function TeamPage() {
   const deleteMutation = useDeleteTeamMember();
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", role: "", bio: "", avatarUrl: "", order: 0 });
+  const [form, setForm] = useState({ name: "", role: "", bio: "", avatarUrl: "", order: 0, website: "", linkedin: "", instagram: "" });
 
   const openEditor = (member?: any) => {
     if (member) {
       setEditingId(member.id);
-      setForm({ name: member.name, role: member.role, bio: member.bio, avatarUrl: member.avatarUrl ?? "", order: member.order });
+      setForm({ name: member.name, role: member.role, bio: member.bio, avatarUrl: member.avatarUrl ?? "", order: member.order, website: member.socialLinks?.website ?? "", linkedin: member.socialLinks?.linkedin ?? "", instagram: member.socialLinks?.instagram ?? "" });
     } else {
       setEditingId(null);
-      setForm({ name: "", role: "", bio: "", avatarUrl: "", order: 0 });
+      setForm({ name: "", role: "", bio: "", avatarUrl: "", order: 0, website: "", linkedin: "", instagram: "" });
     }
     setOpen(true);
   };
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    const payload = { ...form, avatarUrl: form.avatarUrl || null };
+    const { website, linkedin, instagram, ...member } = form;
+    const payload = { ...member, avatarUrl: form.avatarUrl || null, socialLinks: Object.fromEntries(Object.entries({ website, linkedin, instagram }).filter(([, value]) => value)) };
     try {
       if (editingId) {
         await updateMutation.mutateAsync({ id: editingId, payload } as any);
@@ -648,7 +691,10 @@ function TeamPage() {
         <form className="grid gap-4" onSubmit={save}>
           <div className="grid gap-4 md:grid-cols-2"><Input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Name" /><Input value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} placeholder="Role" /></div>
           <div className="grid gap-4 md:grid-cols-2"><Input value={form.avatarUrl} onChange={(event) => setForm((current) => ({ ...current, avatarUrl: event.target.value }))} placeholder="Avatar URL" /><Input type="number" value={form.order} onChange={(event) => setForm((current) => ({ ...current, order: Number(event.target.value) }))} /></div>
+          <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const avatarUrl = await readAdminImage(file); setForm((current) => ({ ...current, avatarUrl })); } catch (error) { alert(error instanceof Error ? error.message : "Unable to read image."); event.target.value = ""; } }} />
+          {form.avatarUrl ? <div className="flex items-center gap-3"><img src={form.avatarUrl} alt="Team member preview" className="h-24 w-24 rounded-2xl object-cover" /><Button type="button" variant="ghost" onClick={() => setForm((current) => ({ ...current, avatarUrl: "" }))}>Remove photo</Button></div> : null}
           <Textarea value={form.bio} onChange={(event) => setForm((current) => ({ ...current, bio: event.target.value }))} placeholder="Bio" />
+          <div className="grid gap-4 md:grid-cols-3"><Input type="url" value={form.website} onChange={(event) => setForm((current) => ({ ...current, website: event.target.value }))} placeholder="Website URL" /><Input type="url" value={form.linkedin} onChange={(event) => setForm((current) => ({ ...current, linkedin: event.target.value }))} placeholder="LinkedIn URL" /><Input type="url" value={form.instagram} onChange={(event) => setForm((current) => ({ ...current, instagram: event.target.value }))} placeholder="Instagram URL" /></div>
           <Button type="submit" className="w-full">Save Member</Button>
         </form>
       </Modal>
@@ -665,8 +711,17 @@ function ServicesPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [featureText, setFeatureText] = useState("");
   const [form, setForm] = useState({ title: "", description: "", icon: "Home", order: 0 });
+  const [imageError, setImageError] = useState("");
 
   const readFileAsDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      reject(new Error("Choose a JPG, PNG, or WEBP image."));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      reject(new Error("Image must be 5 MB or smaller."));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
     reader.onerror = () => reject(new Error("Failed to read image file"));
@@ -683,6 +738,7 @@ function ServicesPage() {
       setForm({ title: "", description: "", icon: "Home", order: 0 });
       setFeatureText("");
     }
+    setImageError("");
     setOpen(true);
   };
 
@@ -712,14 +768,21 @@ function ServicesPage() {
           <div className="grid gap-4 md:grid-cols-3"><Input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} placeholder="Title" /><Input value={form.icon} onChange={(event) => setForm((current) => ({ ...current, icon: event.target.value }))} placeholder="Icon name or image data" /><Input type="number" value={form.order} onChange={(event) => setForm((current) => ({ ...current, order: Number(event.target.value) }))} /></div>
           <div className="grid gap-2">
             <label className="text-sm text-white/70">Upload service image</label>
-            <input type="file" accept="image/*" onChange={async (event) => {
+            <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => {
               const file = event.target.files?.[0];
               if (!file) return;
-              const dataUrl = await readFileAsDataUrl(file);
-              setForm((current) => ({ ...current, icon: dataUrl }));
+              try {
+                setImageError("");
+                const dataUrl = await readFileAsDataUrl(file);
+                setForm((current) => ({ ...current, icon: dataUrl }));
+              } catch (error) {
+                setImageError(error instanceof Error ? error.message : "Unable to read image.");
+                event.target.value = "";
+              }
             }} />
+            {imageError ? <p className="text-sm text-rose-300">{imageError}</p> : null}
           </div>
-          {form.icon.startsWith("data:") || form.icon.startsWith("/images/") ? <img src={form.icon} alt="service preview" className="h-24 w-24 rounded-2xl object-cover" /> : null}
+          {form.icon.startsWith("data:") || form.icon.startsWith("/images/") || form.icon.startsWith("http") ? <div className="flex items-center gap-3"><img src={form.icon} alt="service preview" className="h-24 w-24 rounded-2xl object-cover" /><Button type="button" variant="ghost" onClick={() => setForm((current) => ({ ...current, icon: "Home" }))}>Remove image</Button></div> : null}
           <Textarea value={form.description} onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))} placeholder="Description" />
           <Textarea value={featureText} onChange={(event) => setFeatureText(event.target.value)} placeholder="Features, one per line" />
           <Button type="submit" className="w-full">Save Service</Button>
@@ -774,6 +837,8 @@ function TestimonialsPage() {
         <form className="grid gap-4" onSubmit={save}>
           <div className="grid gap-4 md:grid-cols-2"><Input value={form.clientName} onChange={(event) => setForm((current) => ({ ...current, clientName: event.target.value }))} placeholder="Client name" /><Input value={form.clientTitle} onChange={(event) => setForm((current) => ({ ...current, clientTitle: event.target.value }))} placeholder="Client title" /></div>
           <div className="grid gap-4 md:grid-cols-2"><Input type="number" min={1} max={5} value={form.rating} onChange={(event) => setForm((current) => ({ ...current, rating: Number(event.target.value) }))} /><Input value={form.avatarUrl} onChange={(event) => setForm((current) => ({ ...current, avatarUrl: event.target.value }))} placeholder="Avatar URL" /></div>
+          <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const avatarUrl = await readAdminImage(file); setForm((current) => ({ ...current, avatarUrl })); } catch (error) { alert(error instanceof Error ? error.message : "Unable to read image."); event.target.value = ""; } }} />
+          {form.avatarUrl ? <div className="flex items-center gap-3"><img src={form.avatarUrl} alt="Testimonial preview" className="h-24 w-24 rounded-2xl object-cover" /><Button type="button" variant="ghost" onClick={() => setForm((current) => ({ ...current, avatarUrl: "" }))}>Remove photo</Button></div> : null}
           <Textarea value={form.message} onChange={(event) => setForm((current) => ({ ...current, message: event.target.value }))} placeholder="Message" />
           <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={form.featured} onChange={(event) => setForm((current) => ({ ...current, featured: event.target.checked }))} /> Featured testimonial</label>
           <Button type="submit" className="w-full">Save Testimonial</Button>
@@ -784,6 +849,7 @@ function TestimonialsPage() {
 }
 
 function SettingsPage() {
+  const settingsQuery = useSiteSettings();
   const [overrides, setOverrides] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("anugraha_site_overrides") || "{}");
@@ -791,6 +857,13 @@ function SettingsPage() {
       return {};
     }
   });
+
+  useEffect(() => {
+    if (settingsQuery.data) {
+      setOverrides(settingsQuery.data);
+      localStorage.setItem("anugraha_site_overrides", JSON.stringify(settingsQuery.data));
+    }
+  }, [settingsQuery.data]);
 
   const update = (patch: any) => {
     const next = { ...overrides, ...patch };
@@ -818,7 +891,6 @@ function SettingsPage() {
       try { window.dispatchEvent(new CustomEvent('anugraha_settings_changed', { detail: data })); } catch {}
       alert("Saved to server and updated overrides.");
     } catch (err) {
-      console.warn(err);
       alert("Failed to save to server. Is the API reachable?");
     }
   };
@@ -834,15 +906,10 @@ function SettingsPage() {
           <Input placeholder="Background image path (e.g. /images/hero-bg.jpg)" value={overrides.heroImage ?? "/images/hero-bg.jpg"} onChange={(e) => update({ heroImage: e.target.value })} />
           <div className="grid gap-2">
             <label className="text-sm">Upload hero image</label>
-            <input type="file" accept="image/*" onChange={async (e) => {
+            <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () => {
-                const data = String(reader.result || "");
-                update({ heroImage: data });
-              };
-              reader.readAsDataURL(file);
+              try { update({ heroImage: await readAdminImage(file) }); } catch (error) { alert(error instanceof Error ? error.message : "Unable to read image."); e.target.value = ""; }
             }} />
             {overrides.heroImage ? <img src={overrides.heroImage} alt="hero preview" className="h-40 w-full object-cover rounded-md" /> : null}
           </div>
@@ -868,15 +935,10 @@ function SettingsPage() {
           <Input placeholder="Header logo path (e.g. /images/logo-small.png)" value={overrides.logoImage ?? "/images/logo-small.png"} onChange={(e) => update({ logoImage: e.target.value })} />
           <div className="grid gap-2">
             <label className="text-sm">Upload logo</label>
-            <input type="file" accept="image/*" onChange={async (e) => {
+            <input type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () => {
-                const data = String(reader.result || "");
-                update({ logoImage: data });
-              };
-              reader.readAsDataURL(file);
+              try { update({ logoImage: await readAdminImage(file) }); } catch (error) { alert(error instanceof Error ? error.message : "Unable to read image."); e.target.value = ""; }
             }} />
             {overrides.logoImage ? <img src={overrides.logoImage} alt="logo preview" className="h-20 w-20 object-contain rounded-md" /> : null}
           </div>
@@ -890,6 +952,10 @@ function SettingsPage() {
             <EditableSettingRow label="Office Name" value={String(overrides.officeName ?? "Shivakripa building")} placeholder="Shivakripa building" onSave={(nextValue) => update({ officeName: nextValue })} helperText="Shown on the Office card and in the footer presence line." />
             <EditableSettingRow label="Office Address" value={String(overrides.officeAddress ?? "APMC ROAD, near City hospital, Puttur, Karnataka 574201")} placeholder="APMC ROAD, near City hospital, Puttur, Karnataka 574201" onSave={(nextValue) => update({ officeAddress: nextValue })} isTextarea helperText="Shown as the clickable location text on the homepage." />
             <EditableSettingRow label="Google Maps URL" value={String(overrides.mapsUrl ?? "https://maps.app.goo.gl/eFWv8LbsT6YXw1VH8")} placeholder="https://maps.app.goo.gl/..." onSave={(nextValue) => update({ mapsUrl: nextValue })} helperText="Used for the map pin, office link, and Google review card if no review URL is set." />
+            <EditableSettingRow label="Owner Phone" value={String(overrides.ownerPhone ?? "+91 97430 42978")} placeholder="+91 97430 42978" onSave={(nextValue) => update({ ownerPhone: nextValue })} />
+            <EditableSettingRow label="Office Phone" value={String(overrides.officePhone ?? "+91 82175 85387")} placeholder="+91 82175 85387" onSave={(nextValue) => update({ officePhone: nextValue })} />
+            <EditableSettingRow label="WhatsApp Number" value={String(overrides.whatsappNumber ?? "919743042978")} placeholder="919743042978" onSave={(nextValue) => update({ whatsappNumber: nextValue })} />
+            <EditableSettingRow label="Instagram URL" value={String(overrides.instagramUrl ?? "https://instagram.com/anugrahaconstruction_")} placeholder="https://instagram.com/..." onSave={(nextValue) => update({ instagramUrl: nextValue })} />
           </div>
         </CardContent>
       </Card>
@@ -902,6 +968,21 @@ function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      <Card className="rounded-[20px] border-white/10 bg-white/5 text-white shadow-2xl"><CardHeader><CardTitle>Company Overview Images</CardTitle></CardHeader><CardContent className="space-y-4">
+        <p className="text-sm text-white/60">Upload up to 8 JPG, PNG, or WEBP images. The first five appear in the homepage overview.</p>
+        <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => { const files = Array.from(event.target.files ?? []); try { const images = await Promise.all(files.map(readAdminImage)); update({ overviewImages: [...(Array.isArray(overrides.overviewImages) ? overrides.overviewImages : []), ...images].slice(0, 8) }); } catch (error) { alert(error instanceof Error ? error.message : "Unable to read overview images."); } event.target.value = ""; }} />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3">{(Array.isArray(overrides.overviewImages) ? overrides.overviewImages : []).map((image: string, index: number) => <div key={`${image.slice(0, 32)}-${index}`} className="overflow-hidden rounded-xl border border-white/10 bg-white/5"><img src={image} alt={`Overview ${index + 1}`} className="h-32 w-full object-cover" /><div className="flex items-center justify-between p-2"><div className="flex gap-1"><button type="button" disabled={index === 0} onClick={() => { const next = [...overrides.overviewImages]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; update({ overviewImages: next }); }} className="rounded px-2 py-1 disabled:opacity-30">←</button><button type="button" disabled={index === overrides.overviewImages.length - 1} onClick={() => { const next = [...overrides.overviewImages]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; update({ overviewImages: next }); }} className="rounded px-2 py-1 disabled:opacity-30">→</button></div><label className="cursor-pointer rounded px-2 py-1 text-xs text-primary">Replace<input type="file" className="hidden" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => { const file = event.target.files?.[0]; if (!file) return; try { const replacement = await readAdminImage(file); const next = [...overrides.overviewImages]; next[index] = replacement; update({ overviewImages: next }); } catch (error) { alert(error instanceof Error ? error.message : "Unable to replace image."); } event.target.value = ""; }} /></label><button type="button" onClick={() => update({ overviewImages: overrides.overviewImages.filter((_: string, itemIndex: number) => itemIndex !== index) })} className="rounded-full bg-rose-600 p-1 text-white"><X className="h-4 w-4" /></button></div></div>)}</div>
+      </CardContent></Card>
+
+      <Card className="rounded-[20px] border-white/10 bg-white/5 text-white shadow-2xl"><CardHeader><CardTitle>Gallery</CardTitle></CardHeader><CardContent className="space-y-4">
+        <input type="file" multiple accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" onChange={async (event) => { const files = Array.from(event.target.files ?? []); try { const images = await Promise.all(files.map(readAdminImage)); update({ galleryImages: [...(Array.isArray(overrides.galleryImages) ? overrides.galleryImages : []), ...images].slice(0, 24) }); } catch (error) { alert(error instanceof Error ? error.message : "Unable to read gallery images."); } event.target.value = ""; }} />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{(Array.isArray(overrides.galleryImages) ? overrides.galleryImages : []).map((image: string, index: number) => <div key={`${image.slice(0, 32)}-${index}`} className="relative"><img src={image} alt={`Gallery ${index + 1}`} className="h-28 w-full rounded-xl object-cover" /><button type="button" onClick={() => update({ galleryImages: overrides.galleryImages.filter((_: string, itemIndex: number) => itemIndex !== index) })} className="absolute right-2 top-2 rounded-full bg-rose-600 p-1 text-white"><X className="h-4 w-4" /></button></div>)}</div>
+      </CardContent></Card>
+
+      <Card className="rounded-[20px] border-white/10 bg-white/5 text-white shadow-2xl"><CardHeader><CardTitle>FAQs</CardTitle></CardHeader><CardContent>
+        <Textarea className="min-h-48" placeholder={"Question | Answer\nOne FAQ per line"} value={(Array.isArray(overrides.faqs) ? overrides.faqs : []).map((faq: { question: string; answer: string }) => `${faq.question} | ${faq.answer}`).join("\n")} onChange={(event) => update({ faqs: event.target.value.split("\n").map((line) => { const [question, ...answer] = line.split("|"); return { question: question.trim(), answer: answer.join("|").trim() }; }).filter((faq) => faq.question && faq.answer) })} />
+      </CardContent></Card>
 
       <Card className="rounded-[20px] border-white/10 bg-white/5 text-white shadow-2xl"><CardHeader><CardTitle>WhatsApp Notifications</CardTitle></CardHeader><CardContent>
         <div className="grid gap-3">

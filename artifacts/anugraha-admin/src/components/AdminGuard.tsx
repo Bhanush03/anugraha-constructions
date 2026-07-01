@@ -7,7 +7,7 @@ import { Button, Card, CardContent, CardHeader, CardTitle, Input } from "@/compo
 import { login } from "@anugraha/api-client-react";
 import { isAdminAuthed, markAdminAuthed } from "@/lib/auth";
 
-export function AdminGuard({ children }: { children: ReactNode }) {
+export function AdminGuard({ children }: { children?: ReactNode }) {
   const [, setLocation] = useLocation();
   const [isAuthed, setIsAuthed] = useState(() => isAdminAuthed());
   const [username, setUsername] = useState(import.meta.env.VITE_ADMIN_USERNAME ?? "admin");
@@ -22,6 +22,10 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     document.documentElement.classList.add("dark");
     return () => document.documentElement.classList.remove("dark");
   }, []);
+
+  useEffect(() => {
+    if (isAuthed && !children) setLocation(successPath);
+  }, [children, isAuthed, setLocation]);
 
   const submit = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -42,7 +46,6 @@ export function AdminGuard({ children }: { children: ReactNode }) {
 
   if (isAuthed) {
     if (children) return <>{children}</>;
-    setLocation(successPath);
     return null;
   }
 

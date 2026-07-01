@@ -1,5 +1,7 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { mkdir } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 
 import * as schema from "./schema.js";
 
@@ -34,7 +36,17 @@ export async function createDatabaseClient(databaseUrl: string) {
 
 	if (!cachedDatabase || cachedDatabaseUrl !== resolvedUrl) {
 		cachedDatabaseUrl = resolvedUrl;
-		cachedDatabase = drizzle(createPostgresClient(resolvedUrl), { schema });
+		if (resolvedUrl.startsWith("pglite://")) {
+			const [{ PGlite }, { drizzle: drizzlePglite }] = await Promise.all([
+				import("@electric-sql/pglite"),
+				import("drizzle-orm/pglite")
+			]);
+			const dataDir = resolvedUrl.slice("pglite://".length) || "./.data/anugraha";
+			await mkdir(dirname(resolve(dataDir)), { recursive: true });
+			cachedDatabase = drizzlePglite(new PGlite(dataDir), { schema });
+		} else {
+			cachedDatabase = drizzle(createPostgresClient(resolvedUrl), { schema });
+		}
 	}
 
 	return cachedDatabase;

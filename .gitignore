@@ -1,4 +1,6 @@
 node_modules
+.data
+artifacts/api-server/.data
 dist
 build
 .env

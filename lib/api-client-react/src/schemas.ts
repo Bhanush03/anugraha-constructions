@@ -59,6 +59,7 @@ export const teamMemberSchema = z.object({
   role: z.string(),
   bio: z.string(),
   avatarUrl: z.string().nullable().optional(),
+  socialLinks: z.record(z.string()).default({}),
   order: z.number().int(),
   createdAt: z.string()
 });
@@ -96,4 +97,4 @@ export const siteSettingsSchema = z.object({
   heroImage: z.string().nullable().optional(),
   logoImage: z.string().nullable().optional(),
   updatedAt: z.string().nullable().optional()
-});
+}).passthrough();

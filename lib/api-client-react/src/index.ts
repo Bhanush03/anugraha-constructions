@@ -68,14 +68,18 @@ function useInvalidation(keys: Array<readonly unknown[]>) {
 export function usePublicStats() {
   return useQuery({
     queryKey: ["public-stats"],
-    queryFn: async () => publicStatsSchema.parse(await request("/api/stats"))
+    queryFn: async () => publicStatsSchema.parse(await request("/api/stats")),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000
   });
 }
 
 export function useFeaturedProjects() {
   return useQuery({
     queryKey: ["projects", "featured"],
-    queryFn: async () => parseArray(projectSchema, await request("/api/projects/featured"))
+    queryFn: async () => parseArray(projectSchema, await request("/api/projects/featured")),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000
   });
 }
 
@@ -90,14 +94,18 @@ export function useProject(projectId?: number) {
 export function useOngoingProjects() {
   return useQuery({
     queryKey: ["projects", "ongoing"],
-    queryFn: async () => parseArray(projectSchema, await request("/api/projects/ongoing"))
+    queryFn: async () => parseArray(projectSchema, await request("/api/projects/ongoing")),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000
   });
 }
 
 export function useProjects(status?: string) {
   return useQuery({
     queryKey: ["projects", status ?? "all"],
-    queryFn: async () => parseArray(projectSchema, await request(`/api/projects${status ? `?status=${status}` : ""}`))
+    queryFn: async () => parseArray(projectSchema, await request(`/api/projects${status ? `?status=${status}` : ""}`)),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000
   });
 }
 
@@ -115,7 +123,10 @@ export function useServices() {
 export function useTestimonials() {
   return useQuery({
     queryKey: ["testimonials"],
-    queryFn: async () => parseArray(testimonialSchema, await request("/api/testimonials"))
+    queryFn: async () => parseArray(testimonialSchema, await request("/api/testimonials")),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+    staleTime: 5_000
   });
 }
 
@@ -132,7 +143,10 @@ export function useCallbacks() {
 export function useTeam() {
   return useQuery({
     queryKey: ["team"],
-    queryFn: async () => parseArray(teamMemberSchema, await request("/api/team"))
+    queryFn: async () => parseArray(teamMemberSchema, await request("/api/team")),
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+    staleTime: 5_000
   });
 }
 
@@ -140,7 +154,9 @@ export function useSiteSettings() {
   return useQuery({
     queryKey: ["site-settings"],
     queryFn: async () => siteSettingsSchema.parse(await request("/api/settings")),
-    staleTime: 30_000,
+    staleTime: 5_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: 15_000,
     retry: 0
   });
 }

@@ -23,6 +23,16 @@ const parseJsonArray = (value: string | string[] | null | undefined) => {
     return [];
   }
 };
+const parseJsonObject = (value: string | Record<string, string> | null | undefined) => {
+  if (value && typeof value !== "string") return value;
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+};
 const slugify = (value: string) => value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 export const serializeProject = (project: InferSelectModel<typeof projects>) => ({
@@ -55,5 +65,6 @@ export const serializeCallback = (callback: InferSelectModel<typeof callbacks>) 
 
 export const serializeTeamMember = (member: InferSelectModel<typeof team>) => ({
   ...member,
+  socialLinks: parseJsonObject(member.socialLinks),
   createdAt: toIso(member.createdAt)
 });
